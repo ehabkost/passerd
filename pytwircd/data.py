@@ -41,6 +41,7 @@ class User(Base):
     __tablename__ = 'users'
     __table_args__ = (
         UniqueConstraint('twitter_login'),
+        {}
     )
     id = Column(Integer, primary_key=True)
     twitter_login = Column(String)
