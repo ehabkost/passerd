@@ -483,7 +483,9 @@ class PyTwircProtocol(IRC):
 
     def mask_matches(self, mask):
         #FIXME: match wildcards?
-        yield self.get_user(mask)
+        u = self.get_user(mask)
+        if u:
+            yield u
 
     def who_matches(self, mask):
         for u in self.mask_matches(mask):
