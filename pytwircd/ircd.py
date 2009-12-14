@@ -37,9 +37,9 @@ from pytwircd.feeds import HomeTimelineFeed
 from pytwircd.callbacks import CallbackList
 
 
-MYAGENT = 'PyTwirc'
+MYAGENT = 'Passerd'
 #FIXME: use a real hostname
-MYHOST = 'pytwirc.raisama.net'
+MYHOST = 'passerd.raisama.net'
 VERSION = '0.0.1'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
