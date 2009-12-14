@@ -30,29 +30,12 @@ import logging
 
 from twisted.internet import reactor, defer
 
+from pytwircd.callbacks import CallbackList
+
 REFRESH_DELAY = 90
 QUERY_COUNT = 100
 
 dbg = logging.debug
-
-# maybe Twisted has something equivalent to this, already?
-class CallbackList:
-    def __init__(self):
-        self._cbs = []
-
-    def addCallback(self, cb, *args, **kwargs):
-        self._cbs.append( (cb, args, kwargs) )
-
-    def callback(self, *args, **kwargs):
-        for cb, ca, ckw in self._cbs:
-            a = []
-            a.extend(args)
-            a.extend(ca)
-            kw = {}
-            kw.update(kwargs)
-            kw.update(ckw)
-            cb(*a, **kw)
-
 
 class HomeTimelineFeed:
     def __init__(self, proto):

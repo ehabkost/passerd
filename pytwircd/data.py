@@ -58,6 +58,14 @@ class UserVar(Base):
     value = Column(String)
 
 
+class TwitterUserData(Base):
+    """Cache of twitter user information"""
+    __tablename__ = 'twitter_users'
+    twitter_id = Column(Integer, primary_key=True)
+    twitter_screen_name = Column(String)
+    twitter_name = Column(String)
+
+
 class DataStore:
     def __init__(self, url):
         self.engine = create_engine(url, echo=DEBUG)
@@ -66,6 +74,9 @@ class DataStore:
     def create_tables(self):
         Base.metadata.create_all(self.engine)
 
+
+    def query(self, *args, **kwargs):
+        return self.session.query(*args, **kwargs)
 
     def new_user(self, login):
         u = User(twitter_login=login)
@@ -99,7 +110,7 @@ class DataStore:
             v.value = value
         self.session.commit()
 
-__all__ = ['DataStore']
+__all__ = ['DataStore', 'TwitterUserData']
 
 if __name__ == '__main__':
     import logging, sys

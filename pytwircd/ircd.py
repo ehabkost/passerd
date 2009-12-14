@@ -32,8 +32,9 @@ from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
 
 from twittytwister.twitter import Twitter
-from pytwircd.data import DataStore
+from pytwircd.data import DataStore, TwitterUserData
 from pytwircd.feeds import HomeTimelineFeed
+from pytwircd.callbacks import CallbackList
 
 
 MYAGENT = 'PyTwirc'
@@ -45,35 +46,6 @@ SUPPORTED_CHAN_MODES = 'b'
 
 dbg = logging.debug
 
-class TwitterUserCache:
-    """Caches information about Twitter users"""
-    def __init__(self, proto):
-        self.proto = proto
-        self.id2user = {}
-
-    def new_user(self, id, nick, name):
-        #TODO: notify client
-        u = IrcUser(self.proto, str(nick), str(nick), 'twitter', str(name))
-        self.id2user[id] = u
-        return u
-
-    def update_user_info(self, id, alias, name):
-        #TODO: notify client
-        u = self.lookup_id(id)
-        if u is None:
-            u = self.new_user(id, alias, name)
-        else:
-            #TODO: update existing user info and notify client
-            pass
-
-    def lookup_id(self, id):
-        return self.id2user.get(id)
-
-    def user_from_id(self, id):
-        u = self.lookup_id(id)
-        if u is None:
-            u = self.new_user(id, 'user-id-%s' % (id))
-        return u
 
 def hooks(fn):
     """Decorator that call beforeFoo() and afterFoo() methods if available"""
@@ -158,12 +130,8 @@ class IrcTarget:
 class IrcUser(IrcTarget):
     supported_modes = SUPPORTED_USER_MODES
 
-    def __init__(self, proto, nick, username, hostname, real_name):
+    def __init__(self, proto):
         self.proto = proto
-        self.nick = nick
-        self.username = username
-        self.hostname = hostname
-        self.real_name = real_name
 
     def target_name(self):
         return self.nick
@@ -288,6 +256,97 @@ class IrcServer(IrcTarget):
     def full_id(self):
         return self.name
 
+
+class TwitterIrcUser(IrcUser):
+    def __init__(self, proto, data):
+        IrcUser.__init__(self, proto)
+        self.data = data
+
+    nick = property(lambda self: str(self.data.twitter_screen_name))
+    username = property(lambda self: str(self.data.twitter_screen_name))
+    real_name = property(lambda self: self.data.twitter_name.encode('utf-8'))
+    hostname = property(lambda self: 'twitter.com')
+
+
+class TwitterUserInfo:
+    def from_data(self, d):
+        self.screen_name = d.twitter_screen_name
+        self.name = d.twitter_name
+        return self
+
+    def to_data(self, d):
+        d.twitter_screen_name = self.screen_name
+        d.twitter_name = self.name
+        return self
+
+class TwitterUserCache:
+    """Caches information about Twitter users"""
+    def __init__(self, proto):
+        self.proto = proto
+        self.callbacks = CallbackList()
+        self.id2user = {}
+
+    def addCallback(self, cb, *args, **kwargs):
+        """Add a new callback function
+
+        Callback function is called with arguments: (id, old_info, new_info)
+        old_info may be None, if it's a new user
+        """
+        self.callbacks.addCallback(cb, *args, **kwargs)
+
+    def _new_user(self, id, info):
+        d = TwitterUserData(twitter_id=id)
+        info.to_data(d)
+        #FIXME: encapsulate the following session operations, somehow:
+        self.proto.data.session.add(d)
+        self.proto.data.session.commit()
+
+        u = TwitterIrcUser(self.proto, d)
+        self.id2user[id] = u
+        self.callbacks.callback(id, None, info)
+        return u
+
+    def _update_user_info(self, id, new_info):
+        u = self.lookup_id(id)
+        if u is None:
+            u = self._new_user(id, new_info)
+        else:
+            old_info = TwitterUserInfo().from_data(u.data)
+            new_info.to_data(u.data)
+            self.proto.data.session.commit()
+
+            self.callbacks.callback(id, old_info, new_info)
+        return u
+
+    def update_user_info(self, id, screen_name, name):
+        i = TwitterUserInfo()
+        i.screen_name = screen_name
+        i.name = name
+        return self._update_user_info(id, i)
+
+    def lookup_id(self, id):
+        u = self.id2user.get(id)
+        # info already on memory:
+        if u is not None:
+            return u
+
+        #FIXME: encapsulate the following session operations, somehow:
+        d = self.proto.data.query(TwitterUserData).get(id)
+        if d is None:
+            return None
+
+        return TwitterIrcUser(self.proto, d)
+
+
+    def user_from_id(self, id):
+        u = self.lookup_id(id)
+        if u is None:
+            new_info = TwitterUserInfo()
+            new_info.screen_name = 'user-id-%s' % (id)
+            new_info.name = 'Twitter User id %s (info not fetched yet)' % (id)
+            u = self.new_user(id, new_info)
+        return u
+
 class TwitterChannel(IrcChannel):
     """The #twitter channel"""
     def __init__(self, proto, name):
@@ -313,6 +372,7 @@ class TwitterChannel(IrcChannel):
         self.sendMessage(u, text.encode('utf-8'))
 
     def got_entry(self, e):
+        dbg("#twitter got_entry: %r" % (e))
         u = e.user
         self.proto.user_cache.update_user_info(u.id, u.screen_name, u.name)
         self.printEntry(e)
@@ -358,7 +418,12 @@ class PyTwircProtocol(IRC):
 
         self.my_irc_server = IrcServer(self.myhost)
 
-        self.the_user = IrcUser(self, 'guest', 'guest', self.hostname, 'Unidentified User')
+        u = self.the_user = IrcUser(self)
+        u.nick = 'guest'
+        u.username = 'guest'
+        u.hostname = self.hostname
+        u.real_name = 'Unidentified User'
+
         self.users = [self.the_user]
 
         self.dbg("Gotcha!")
