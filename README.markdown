@@ -2,9 +2,9 @@
 What is Passerd
 ===============
 
-Passerd is an IRC client that runs an IRC server. Just run it and point an IRC
-server to it, and you'll see your friends as IRC contacts, and tweets as
-messages on an IRC channel.
+Passerd is a Twitter client that runs an IRC server. Just run it and point an
+IRC client to it, and you'll see your Twitter friends as IRC contacts, and
+tweets appearing as messages on an IRC channel.
 
 Status
 ======
