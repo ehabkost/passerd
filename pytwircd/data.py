@@ -51,6 +51,7 @@ class UserVar(Base):
     __tablename__ = 'user_vars'
     __table_args__ = (
         UniqueConstraint('user_id','name'),
+        {}
     )
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
