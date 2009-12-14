@@ -32,9 +32,11 @@ from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
 
 from twittytwister.twitter import Twitter
+
 from pytwircd.data import DataStore, TwitterUserData
 from pytwircd.feeds import HomeTimelineFeed
 from pytwircd.callbacks import CallbackList
+from pytwircd.utils import htmlentitydecode
 
 
 MYAGENT = 'Passerd'
@@ -369,6 +371,8 @@ class TwitterChannel(IrcChannel):
         text = text.replace('\n', '').replace('\r', '')
 
         dbg('entry text: %r' % (text))
+        text = htmlentitydecode(text)
+        dbg('entities decoded: %r' % (text))
         self.sendMessage(u, text.encode('utf-8'))
 
     def got_entry(self, e):
