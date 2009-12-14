@@ -28,7 +28,8 @@ Python modules:
 On Fedora
 ---------
 
-Run:
+To install the dependencies on a Fedora machine, run:
+
 `yum install python-twisted python-twisted-words python-sqlalchemy python-oauth`
 
 
@@ -40,7 +41,7 @@ How do I use it?
 * Run `git submodule update`
 * Run ./run.sh
 * Point your IRC client to server `localhost`, port 6667, using your
-  IRC username as nickname, and your IRC password as password
+  Twitter login as nickname, and your Twitter password as password
 * Join the #twitter channel on the server
 * Have fun!
 
