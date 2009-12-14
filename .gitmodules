@@ -1,0 +1,3 @@
+[submodule "third-party/twitty-twister"]
+	path = third-party/twitty-twister
+	url = git://github.com/ehabkost/twitty-twister.git
