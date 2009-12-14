@@ -368,10 +368,11 @@ class TwitterChannel(IrcChannel):
 
         dbg("entry id: %r" % (entry.id))
         # security:
-        text = text.replace('\n', '').replace('\r', '')
 
         dbg('entry text: %r' % (text))
         text = full_entity_decode(text)
+        # security: remove invalid chars from text:
+        text = text.replace('\n', '').replace('\r', '')
         dbg('entities decoded: %r' % (text))
         self.sendMessage(u, text.encode('utf-8'))
 
