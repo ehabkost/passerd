@@ -40,8 +40,8 @@ from pytwircd.utils import htmlentitydecode
 
 
 MYAGENT = 'Passerd'
-#FIXME: use a real hostname
-MYHOST = 'passerd.raisama.net'
+#FIXME: use a real hostname?
+MYHOST = 'passerd'
 VERSION = '0.0.1'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
