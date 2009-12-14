@@ -66,6 +66,7 @@ Credits
 * Early testing and ideas from:
   * [Caio Begotti](http://twitter.com/caio1982)
   * [Alexandre Possebom](http://twitter.com/possebom)
+  * [Felipe Arruda](http://twitter.com/felipemiguel)
 * Some feature ideas were shamelessly borrowed from [tircd][tircd]
 
 
