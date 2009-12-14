@@ -292,7 +292,8 @@ class TwitterChannel(IrcChannel):
     """The #twitter channel"""
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.feed = HomeTimelineFeed(proto, self.got_entry)
+        self.feed = HomeTimelineFeed(proto)
+        self.feed.addCallback(self.got_entry)
 
     def topic(self):
         return "The Twitter channel!"

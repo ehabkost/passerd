@@ -35,13 +35,35 @@ QUERY_COUNT = 100
 
 dbg = logging.debug
 
+# maybe Twisted has something equivalent to this, already?
+class CallbackList:
+    def __init__(self):
+        self._cbs = []
+
+    def addCallback(self, cb, *args, **kwargs):
+        self._cbs.append( (cb, args, kwargs) )
+
+    def callback(self, *args, **kwargs):
+        for cb, ca, ckw in self._cbs:
+            a = []
+            a.extend(args)
+            a.extend(ca)
+            kw = {}
+            kw.update(kwargs)
+            kw.update(ckw)
+            cb(*a, **kw)
+
+
 class HomeTimelineFeed:
-    def __init__(self, proto, callback):
+    def __init__(self, proto):
         self.proto = proto
-        self.callback = callback
+        self.callbacks = CallbackList()
         self.continue_refreshing = False
         self.next_refresh = None
         self.last_status_id = self.proto.user_var('home_last_status_id')
+
+    def addCallback(self, *args, **kwargs):
+        self.callbacks.addCallback(*args, **kwargs)
 
     def get_api(self):
         return self.proto.api
@@ -80,7 +102,7 @@ class HomeTimelineFeed:
         def finished(*args):
             dbg("finished loading %r" % (args,))
             for e in entries:
-                self.callback(e)
+                self.callbacks.callback(e)
                 if e.id > self.last_status_id:
                     self.last_status_id = e.id
                     self.proto.set_user_var('home_last_status_id', self.last_status_id)
