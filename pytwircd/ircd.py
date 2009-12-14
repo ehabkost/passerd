@@ -326,7 +326,7 @@ class TwitterChannel(IrcChannel):
 
     def forceRefresh(self, last):
         def doit():
-            self._refresh(last_status=last).addCallback(done)
+            self.feed._refresh(last_status=last).addCallback(done)
 
         def done(num_args):
             if num_args == 0:
