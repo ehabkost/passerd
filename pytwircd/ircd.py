@@ -24,7 +24,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import sys
+import sys, logging
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import IRC
@@ -33,10 +33,8 @@ from twisted.internet import reactor, defer
 
 from twittytwister.twitter import Twitter
 from pytwircd.data import DataStore
+from pytwircd.feeds import HomeTimelineFeed
 
-
-REFRESH_DELAY = 90
-QUERY_COUNT = 100
 
 MYAGENT = 'PyTwirc'
 #FIXME: use a real hostname
@@ -45,10 +43,7 @@ VERSION = '0.0.1'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
 
-def dbg(s, *args):
-    if args:
-        s = s % args
-    print s
+dbg = logging.debug
 
 class TwitterUserCache:
     """Caches information about Twitter users"""
@@ -203,6 +198,9 @@ class IrcChannel(IrcTarget):
     def ban_masks(self, params):
         return []
 
+    def list_members(self):
+        return []
+
     def mode_query_b(self, params):
         """Query ban list"""
         self.proto.dbg("checking the ban list for %s" % (self.name))
@@ -240,9 +238,31 @@ class IrcChannel(IrcTarget):
         self.proto.send_reply(irc.RPL_TOPIC, self.name, ':%s' % (self.topic()))
     def sendModes(self):
         self.proto.send_reply(irc.RPL_CHANNELMODEIS, self.name, self.fullModeSpec())
+
+    def _sendNames(self, members):
+        namelist = []
+        def flush():
+            names = ' '.join(namelist)
+            self.proto.send_reply(irc.RPL_NAMREPLY, '=', self.name, ':%s' % (names))
+            namelist[:] = []
+
+        for m in members:
+            namelist.append(m.nick)
+            if len(namelist) > 30:
+                flush()
+        flush()
+        self.proto.send_reply(irc.RPL_ENDOFNAMES, self.name, ':End of NAMES list')
+
     def sendNames(self):
-        names = ' '.join([u.nick for u in self.members()])
-        self.proto.send_reply(irc.RPL_NAMREPLY, '=', self.name, ':%s' % (names))
+        def doit():
+            d = defer.maybeDeferred(self.list_members)
+            d.addCallback(send_names)
+
+        def send_names(members):
+            dbg("got member names: %r" % (members))
+            self._sendNames(members)
+
+        doit()
 
     @hooks
     def userJoined(self, user):
@@ -272,20 +292,13 @@ class TwitterChannel(IrcChannel):
     """The #twitter channel"""
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.last_status_id = self.proto.user_var('home_last_status_id')
-        self.continue_refreshing = False
-        self.next_refresh = None
+        self.feed = HomeTimelineFeed(proto, self.got_entry)
 
     def topic(self):
         return "The Twitter channel!"
 
-    def get_api(self):
-        return self.proto.api
-    api = property(get_api)
-
-    def members(self):
-        #FIXME: list all followed users
-        yield self.proto.the_user
+    def list_members(self):
+        return [self.proto.the_user]
 
     def printEntry(self, entry):
         u = self.proto.user_cache.user_from_id(entry.user.id)
@@ -298,78 +311,17 @@ class TwitterChannel(IrcChannel):
         dbg('entry text: %r' % (text))
         self.sendMessage(u, text.encode('utf-8'))
 
-    def _refresh(self, last_status=None):
-        if last_status is None:
-            last_status = self.last_status_id
-
-        entries = []
-        d = defer.Deferred()
-
-        def doit():
-            args = {}
-            if last_status:
-                args['since_id'] = last_status
-            args['count'] = str(QUERY_COUNT)
-            dbg("will try to use the API:")
-            self.api.home_timeline(got_entry, args).addCallback(finished)
-
-        # store the entries and then show them in chronological order:
-        def got_entry(e):
-            dbg("got an entry: %r" % (repr(e)))
-            entries.insert(0, e)
-
-        def finished(*args):
-            dbg("finished loading %r" % (args,))
-            for e in entries:
-                u = e.user
-                self.proto.user_cache.update_user_info(u.id, u.screen_name, u.name)
-                self.printEntry(e)
-
-                if e.id > self.last_status_id:
-                    self.last_status_id = e.id
-                    self.proto.set_user_var('home_last_status_id', self.last_status_id)
-            d.callback(len(entries))
-
-        doit()
-        return d
-
-    def cancel_next_refresh(self):
-        if self.next_refresh is not None:
-            if self.next_refresh.active():
-                self.next_refresh.cancel()
-            self.next_refresh = None
-
-    def refresh_resched(self):
-        self.cancel_next_refresh()
-        self.next_refresh = reactor.callLater(REFRESH_DELAY, self.refresh)
-
-    def refresh(self):
-        def doit():
-            self.cancel_next_refresh()
-            d = self._refresh()
-            #TODO: add error handler
-            d.addCallback(resched)
-
-        def resched(num_entries):
-            dbg("got %d entries. rescheduling." % (num_entries))
-            if self.continue_refreshing:
-                self.refresh_resched()
-
-        return doit()
-
-
-    def stopUpdating(self):
-        self.continue_refreshing = False
-        self.cancel_next_refresh()
+    def got_entry(self, e):
+        u = e.user
+        self.proto.user_cache.update_user_info(u.id, u.screen_name, u.name)
+        self.printEntry(e)
 
     def afterUserJoined(self, user):
         dbg("user has joined!")
-        self.continue_refreshing = True
-        self.refresh()
-        #self.startUpdating()
+        self.feed.start_refreshing()
 
     def beforeUserLeft(self, user, reason):
-        self.stopUpdating()
+        self.feed.stop_refreshing()
 
     def forceRefresh(self, last):
         def doit():
@@ -612,6 +564,7 @@ class PyTwircFactory(Factory):
         self.data.create_tables()
 
 def run():
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     reactor.listenTCP(6667, PyTwircFactory(sys.argv[1]))
     reactor.run()
 
