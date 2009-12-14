@@ -68,6 +68,7 @@ Credits
   * [Caio Begotti](http://twitter.com/caio1982)
   * [Alexandre Possebom](http://twitter.com/possebom)
   * [Felipe Arruda](http://twitter.com/felipemiguel)
+  * [Olavo Junior](http://twitter.com/olavojunior)
 * Some feature ideas were shamelessly borrowed from [tircd][tircd]
 
 
