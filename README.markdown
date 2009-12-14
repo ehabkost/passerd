@@ -25,12 +25,20 @@ Python modules:
 * sqlalchemy
 * oauth
 
+
 On Fedora
 ---------
 
 To install the dependencies on a Fedora machine, run:
 
 `yum install python-twisted python-twisted-words python-sqlalchemy python-oauth`
+
+
+On Mandriva
+-----------
+
+These dependencies currently match the 2010.0 release but should be ok for others:
+`urpmi python-twisted-words python-sqlite python-sqlalchemy python-oauth`
 
 
 How do I use it?
