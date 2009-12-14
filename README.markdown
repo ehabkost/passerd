@@ -62,9 +62,10 @@ Credits
 -------
 
 * Passerd was written by:
-  * [Eduardo Habkost](http://raisama.net/)
-* Testing and ideas from:
-  * [Caio Begotti](http://caio.ueberalles.net/)
+  * [Eduardo Habkost](http://twitter.com/ehabkost)
+* Early testing and ideas from:
+  * [Caio Begotti](http://twitter.com/caio1982)
+  * [Alexandre Possebom](http://twitter.com/possebom)
 * Some feature ideas were shamelessly borrowed from [tircd][tircd]
 
 
