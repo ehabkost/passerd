@@ -524,7 +524,7 @@ class PyTwircProtocol(IRC):
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
         self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
         self.send_reply(irc.RPL_CREATED, ":This server was created by the Flying Spaghetti Monster")
-        self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, '0', '0') # no modes available yet
+        self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
         self.welcomeUser()
 
