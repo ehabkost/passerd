@@ -36,7 +36,7 @@ from twittytwister.twitter import Twitter
 from pytwircd.data import DataStore, TwitterUserData
 from pytwircd.feeds import HomeTimelineFeed
 from pytwircd.callbacks import CallbackList
-from pytwircd.utils import htmlentitydecode
+from pytwircd.utils import full_entity_decode
 
 
 MYAGENT = 'Passerd'
@@ -371,7 +371,7 @@ class TwitterChannel(IrcChannel):
         text = text.replace('\n', '').replace('\r', '')
 
         dbg('entry text: %r' % (text))
-        text = htmlentitydecode(text)
+        text = full_entity_decode(text)
         dbg('entities decoded: %r' % (text))
         self.sendMessage(u, text.encode('utf-8'))
 
