@@ -383,7 +383,7 @@ class TwitterChannel(IrcChannel):
         self.printEntry(e)
 
     def afterUserJoined(self, user):
-        dbg("user has joined!")
+        dbg("user %s has joined!" % (user.full_id()))
         self.feed.start_refreshing()
 
     def beforeUserLeft(self, user, reason):
