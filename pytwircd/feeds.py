@@ -75,7 +75,7 @@ class HomeTimelineFeed:
                 args['since_id'] = last_status
             args['count'] = str(QUERY_COUNT)
             dbg("will try to use the API:")
-            self.api.home_timeline(got_entry, args).addCallback(finished)
+            self.api.home_timeline(got_entry, args).addCallback(finished).addErrback(d.errback)
 
         # store the entries and then show them in chronological order:
         def got_entry(e):
@@ -98,11 +98,20 @@ class HomeTimelineFeed:
         def doit():
             self.cancel_next_refresh()
             d = self._refresh()
-            #TODO: add error handler
-            d.addCallback(resched)
 
-        def resched(num_entries):
-            dbg("got %d entries. rescheduling." % (num_entries))
+            d.addErrback(error)
+            d.addCallback(done)
+
+            d.addBoth(resched)
+
+        def error(*args):
+            dbg("ERROR while refreshing")
+
+        def done(num_entries):
+            dbg("got %d entries." % (num_entries))
+
+        def resched(*args):
+            dbg("rescheduling...")
             if self.continue_refreshing:
                 self.refresh_resched()
 
