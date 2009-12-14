@@ -26,6 +26,7 @@ Python modules:
 * sqlite
 * sqlalchemy
 * oauth
+* A patched version of twitty-twister -- but don't worry: it is automatically fetched by `git submodule` and `./run.sh` (see run instructions below)
 
 
 Below you'll find instructions to easily get the dependencies on some operating
@@ -51,7 +52,7 @@ How do I run it?
 * Check out the git repository
 * Run `git submodule init`
 * Run `git submodule update`
-* Run ./run.sh
+* Run `./run.sh`
 * Point your IRC client to server `localhost`, port 6667, using your
   Twitter login as nickname, and your Twitter password as password
 * Join the `#twitter` channel on the server
