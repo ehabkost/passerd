@@ -355,6 +355,7 @@ class TwitterChannel(IrcChannel):
         IrcChannel.__init__(self, proto, name)
         self.feed = HomeTimelineFeed(proto)
         self.feed.addCallback(self.got_entry)
+        self.feed.addErrback(self.refresh_error)
 
     def topic(self):
         return "The Twitter channel!"
@@ -381,6 +382,10 @@ class TwitterChannel(IrcChannel):
         u = e.user
         self.proto.user_cache.update_user_info(u.id, u.screen_name, u.name)
         self.printEntry(e)
+
+    def refresh_error(self, e):
+        dbg("#twitter refresh error")
+        self.proto.send_notice(self.proto.the_user, self, "error refreshing feed: %s" % (e.value))
 
     def afterUserJoined(self, user):
         dbg("user %s has joined!" % (user.full_id()))
