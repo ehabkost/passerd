@@ -41,12 +41,19 @@ class HomeTimelineFeed:
     def __init__(self, proto):
         self.proto = proto
         self.callbacks = CallbackList()
+        self.errbacks = CallbackList()
         self.continue_refreshing = False
         self.next_refresh = None
+        self.loading = False
         self.last_status_id = self.proto.user_var('home_last_status_id')
 
     def addCallback(self, *args, **kwargs):
+        """Add a callback for new entries"""
         self.callbacks.addCallback(*args, **kwargs)
+
+    def addErrback(self, *args, **kwargs):
+        """Add a callbck for loading errors"""
+        self.errbacks.addCallback(*args, **kwargs)
 
     def get_api(self):
         return self.proto.api
@@ -75,7 +82,14 @@ class HomeTimelineFeed:
                 args['since_id'] = last_status
             args['count'] = str(QUERY_COUNT)
             dbg("will try to use the API:")
-            self.api.home_timeline(got_entry, args).addCallback(finished).addErrback(d.errback)
+
+            self.api.home_timeline(got_entry, args).addCallbacks(finished, error)
+            dbg("_refresh returning")
+
+        def error(*args):
+            dbg("_refresh error %r" % (args,))
+            self.errbacks.callback(*args)
+            d.errback(*args)
 
         # store the entries and then show them in chronological order:
         def got_entry(e):
@@ -96,21 +110,25 @@ class HomeTimelineFeed:
 
     def refresh(self):
         def doit():
+            if self.loading:
+                dbg("Won't refresh now. Still loading...")
+                return
+
             self.cancel_next_refresh()
-            d = self._refresh()
-
-            d.addErrback(error)
-            d.addCallback(done)
-
-            d.addBoth(resched)
+            self.loading = True
+            self._refresh().addCallbacks(done, error)
 
         def error(*args):
+            self.loading = False
             dbg("ERROR while refreshing")
+            resched()
 
         def done(num_entries):
+            self.loading = False
             dbg("got %d entries." % (num_entries))
+            resched()
 
-        def resched(*args):
+        def resched():
             dbg("rescheduling...")
             if self.continue_refreshing:
                 self.refresh_resched()
