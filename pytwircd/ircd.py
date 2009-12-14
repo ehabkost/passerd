@@ -110,14 +110,14 @@ class IrcTarget:
 
     def modeFlagRequest(self, sender, args):
         for flags,params in self.parseModeSetRequest(args):
-            change = 0
+            value = 0
             for f in flags:
                 if f == '+': value = 1
                 elif f == '-': value = -1
                 else:
                     if value == 0:
                         # no "+" or "-" => simple query
-                        self.modeFlagQuery(self, flag, params)
+                        self.modeFlagQuery(self, f, params)
                     else:
                         self.flagChangeRequest(f, value, params)
 
