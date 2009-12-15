@@ -53,6 +53,7 @@ SUPPORTED_CHAN_MODES = 'b'
 
 MAX_USER_INFO_FETCH = 0  # individual fetch is not implemented yet...
 
+LENGTH_LIMIT = 140
 
 dbg = logging.debug
 
@@ -535,7 +536,22 @@ class TwitterChannel(IrcChannel):
             if msg.startswith('!!'):
                 last = 0
             self.forceRefresh(last)
+            return
 
+        if len(msg) > LENGTH_LIMIT:
+            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d chars)' % (len(msg)))
+            return
+
+        def doit():
+            self.proto.api.update(msg).addCallbacks(done, error)
+
+        def done(*args):
+            self.proto.dbg("Success!!")
+
+        def error(e):
+            self.proto.dbg("error while posting: %s" % (e))
+
+        doit()
 
 
 class PyTwircProtocol(IRC):
