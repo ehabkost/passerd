@@ -243,7 +243,7 @@ class IrcChannel(IrcTarget):
             d.addErrback(log.err)
 
         def send_names(members):
-            dbg("got member names: %r" % (members))
+            dbg("got member list: %d members" % (len(members)))
             self._sendNames(members)
 
         def error(*args):
@@ -481,7 +481,6 @@ class TwitterChannel(IrcChannel):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(ids)))
             users = [self.proto.get_twitter_user(id) for id in ids]
-            dbg("Users: %r" % (users))
             self.proto.twitter_user_cache.fetch_friend_info(users)
             d.callback([self.proto.the_user]+users)
 
