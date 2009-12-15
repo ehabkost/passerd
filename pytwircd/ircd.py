@@ -480,7 +480,7 @@ class TwitterChannel(IrcChannel):
         self.feed.addErrback(self.refresh_error)
 
     def topic(self):
-        return "The Twitter channel!"
+        return "Passerd -- Twitter home timeline channel"
 
     def list_members(self):
         d = defer.Deferred()
