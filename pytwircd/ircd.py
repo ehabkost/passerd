@@ -470,6 +470,7 @@ class TwitterChannel(IrcChannel):
 
         def doit():
             dbg("requesting friend IDs")
+            self.proto.dbg("requesting list of friends...")
             self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
 
         def got_id(id):
