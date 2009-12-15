@@ -185,7 +185,7 @@ class IrcChannel(IrcTarget):
 
     def mode_query_b(self, params):
         """Query ban list"""
-        self.proto.dbg("checking the ban list for %s" % (self.name))
+        dbg("checking the ban list for %s" % (self.name))
         for m in self.ban_masks(params):
             self.proto.send_reply(irc.RPL_BANLIST, self.name, m)
         self.proto.send_reply(irc.RPL_ENDOFBANLIST, self.name, ":End of channel ban list")
@@ -561,7 +561,6 @@ class PyTwircProtocol(IRC):
 
         self.users = [self.the_user]
 
-        self.dbg("Gotcha!")
         dbg("Got new client")
 
     def welcomeUser(self):
