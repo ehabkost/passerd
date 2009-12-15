@@ -34,20 +34,23 @@ class CallbackList:
         self._ignore_exceptions = ignore_exceptions
         self._print_exceptions = print_exceptions
 
+    def _doCall(self, cb, cbargs, cbkwargs, *args, **kwargs):
+        a = []
+        a.extend(args)
+        a.extend(cbargs)
+
+        kw = {}
+        kw.update(kwargs)
+        kw.update(cbkwargs)
+        return cb(*a, **kw)
+
     def addCallback(self, cb, *args, **kwargs):
         self._cbs.append( (cb, args, kwargs) )
 
     def callback(self, *args, **kwargs):
         for cb, ca, ckw in self._cbs:
-            a = []
-            a.extend(args)
-            a.extend(ca)
-            kw = {}
-            kw.update(kwargs)
-            kw.update(ckw)
-
             try:
-                cb(*a, **kw)
+                self._doCall(cb, ca, ckw, *args, **kwargs)
             except:
                 if not self._ignore_exceptions:
                     raise
