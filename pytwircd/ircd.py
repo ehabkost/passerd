@@ -30,6 +30,8 @@ from twisted.words.protocols import irc
 from twisted.words.protocols.irc import IRC
 from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
+from twisted.python import log
+
 
 from twittytwister.twitter import Twitter
 
@@ -45,6 +47,12 @@ MYHOST = 'passerd'
 VERSION = '0.0.1'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
+
+# if more than MAX_USER_INFO_FETCH users are unknown, use /statuses/friends to fetch user info.
+# otherwise, just fetch individual user info
+
+MAX_USER_INFO_FETCH = 0  # individual fetch is not implemented yet...
+
 
 dbg = logging.debug
 
@@ -154,6 +162,10 @@ class IrcUser(IrcTarget):
     def messageReceived(self, sender, msg):
         raise NotImplementedError("private messages aren't supported yet!")
 
+    def notifyNickChange(self, new_nick):
+        """Must be called before self.nick value changes, so the sender ID is correct"""
+        self.proto.send_message(self, 'NICK', new_nick)
+
 
 class IrcChannel(IrcTarget):
     supported_modes = SUPPORTED_CHAN_MODES
@@ -226,11 +238,16 @@ class IrcChannel(IrcTarget):
     def sendNames(self):
         def doit():
             d = defer.maybeDeferred(self.list_members)
-            d.addCallback(send_names)
+            d.addCallbacks(send_names, error)
+            d.addErrback(log.err)
 
         def send_names(members):
             dbg("got member names: %r" % (members))
             self._sendNames(members)
+
+        def error(*args):
+            dbg("ERROR: failure getting member names")
+            self._sendNames([self.proto.the_user])
 
         doit()
 
@@ -259,22 +276,6 @@ class IrcServer(IrcTarget):
         return self.name
 
 
-class TwitterUser:
-    """Information about a Twitter user
-
-    Contains not only user data, but callbacks for data changes
-    """
-    def __init__(self, data):
-        self.data = data
-        self._callbacks = CallbackList()
-
-    def addChangeCallback(self, cb, *args, **kwargs):
-        self._callbacks.addCallback(cb, *args, **kwargs)
-
-    def changeCallback(self, old_info, new_info):
-        self._callbacks.callback(self, old_info, new_info)
-
-
 class TwitterUserInfo:
     """Just carries simple data for a Twitter user
     """
@@ -287,6 +288,9 @@ class TwitterUserInfo:
         d.twitter_screen_name = self.screen_name
         d.twitter_name = self.name
         return self
+
+    def __repr__(self):
+        return 'TwitterUserInfo(%r, %r)' % (self.screen_name, self.name)
 
 class TwitterUserCache:
     """Caches information about Twitter users
@@ -307,51 +311,53 @@ class TwitterUserCache:
         """
         self.callbacks.addCallback(cb, *args, **kwargs)
 
+    def _change_data(self, d, old_info, new_info):
+        # callbacks must becalled _before_ updating the data:
+        self.callbacks.callback(d.twitter_id, old_info, new_info)
+
+        new_info.to_data(d)
+
     def _new_user(self, id, info):
         d = TwitterUserData(twitter_id=id)
-        info.to_data(d)
+
+        self._change_data(d, None, info)
         #FIXME: encapsulate the following session operations, somehow:
         self.proto.data.session.add(d)
         self.proto.data.session.commit()
-
-        tu = TwitterUser(d)
-        self.callbacks.callback(tu, None, info)
-        tu.changeCallback(None, info)
-        return tu
+        return d
 
     def _update_user_info(self, id, new_info):
-        tu = self.lookup_id(id)
-        if tu is None:
+        d = self.lookup_id(id)
+        if d is None:
             return self._new_user(id, new_info)
 
-        old_info = TwitterUserInfo().from_data(tu.data)
-        new_info.to_data(tu.data)
+        old_info = TwitterUserInfo().from_data(d)
+        self._change_data(d, old_info, new_info)
         #FIXME: encapsulate the following session operation, somehow:
         self.proto.data.session.commit()
-
-        self.callbacks.callback(tu, old_info, new_info)
-        tu.changeCallback(old_info, new_info)
-        return tu
+        return d
 
     def update_user_info(self, id, screen_name, name):
+        id = int(id)
         i = TwitterUserInfo()
         i.screen_name = screen_name
         i.name = name
         return self._update_user_info(id, i)
 
     def lookup_id(self, id):
+        id = int(id)
         #FIXME: encapsulate the following session operations, somehow:
         d = self.proto.data.query(TwitterUserData).get(id)
         if d is None:
             return None
 
-        return TwitterUser(d)
+        return d
 
 
 class UnavailableTwitterData:
     """Fake TwitterUserData object for unavailable info"""
     def __init__(self, id):
-        sellf.twitter_id = id
+        self.twitter_id = id
 
     twitter_screen_name = property(lambda self: 'user-id-%s' % (self.twitter_id))
     twitter_name = property(lambda self: 'Twitter User (info not fetched yet)')
@@ -362,16 +368,28 @@ class TwitterIrcUser(IrcUser):
         IrcUser.__init__(self, proto)
         self._twitter_id = id
         self.cache = cache
-        self._tu = None
+        self._data = None
+
+    def data_changed(self, old_info, new_info):
+        dbg("TwitterIrcUser.data_changed! %r %r" % (old_info, new_info))
+        if (old_info is None) or (old_info.screen_name != new_info.screen_name):
+            self.notifyNickChange(str(new_info.screen_name))
+
+    def __get_data(self):
+        if self._data is None:
+            self._data = self.cache.lookup_id(self._twitter_id)
+        return self._data
 
     def _get_data(self):
-        if self._tu is None:
-            self._tu = self.cache.lookup_id(self._twitter_id)
-
-        if self._tu is None:
+        d = self.__get_data()
+        if d is None:
             return UnavailableTwitterData(self._twitter_id)
 
-        return self._tu.data
+        return d
+
+    def has_data(self):
+        """Checks if the Twitter user info is known"""
+        return (self.__get_data() is not None)
 
     data = property(_get_data)
     nick = property(lambda self: str(self.data.twitter_screen_name))
@@ -389,15 +407,26 @@ class TwitterIrcUserCache:
     def __init__(self, proto, cache):
         self.proto = proto
         self.cache = cache
+        self.cache.addCallback(self._user_changed)
         self.id2user = {}
+
+    def _get_user(self, id):
+        return self.id2user.get(int(id))
+
+    def _user_changed(self, id, old_info, new_info):
+        dbg("user_changed: %r, %r, %r" % (id, old_info, new_info))
+        u = self._get_user(id)
+        if u is not None:
+            dbg("user_changed: got user.")
+            u.data_changed(old_info, new_info)
 
     def _new_user(self, id):
         u = TwitterIrcUser(self.proto, self.cache, id)
-        self.id2user[id] = u
+        self.id2user[int(id)] = u
         return u
 
     def user_from_id(self, id):
-        u = self.id2user.get(id)
+        u = self._get_user(id)
         if u is not None:
             # already on current list
             return u
@@ -405,6 +434,24 @@ class TwitterIrcUserCache:
         # found on the DB, but not on our list:
         return self._new_user(id)
 
+    def fetch_all_friend_info(self, unknown_users):
+        #TODO: implement me
+        pass
+
+    def fetch_friend_info(self, users):
+        dbg("fetch_friend_info: begin:")
+        unknown_users = [u for u in users if not u.has_data()]
+        dbg("fetch_friend_info: got unknown users...")
+        if len(unknown_users) > 0:
+            dbg("%d unknown users..." % (len(unknown_users)))
+            self.proto.notice("Sorry, there are %d users whose info I don't know yet. This will be fixed soon" % (len(unknown_users)))
+        return
+
+        #TODO: implement me
+        if len(unknown_users) < MAX_USER_INFO_FETCH:
+            self.fetch_individual_user_info(unknown_users)
+        else:
+            self.fetch_all_friend_info(unknown_users)
 
 class TwitterChannel(IrcChannel):
     """The #twitter channel"""
@@ -418,7 +465,26 @@ class TwitterChannel(IrcChannel):
         return "The Twitter channel!"
 
     def list_members(self):
-        return [self.proto.the_user]
+        d = defer.Deferred()
+        ids = []
+
+        def doit():
+            dbg("requesting friend IDs")
+            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
+
+        def got_id(id):
+            dbg("Got friend id: %r" % (id))
+            ids.append(int(id))
+
+        def finished(*args):
+            dbg("Finished getting friend IDs")
+            users = [self.proto.get_twitter_user(id) for id in ids]
+            dbg("Users: %r" % (users))
+            self.proto.twitter_user_cache.fetch_friend_info(users)
+            d.callback([self.proto.the_user]+users)
+
+        doit()
+        return d
 
     def printEntry(self, entry):
         u = self.proto.get_twitter_user(entry.user.id)
