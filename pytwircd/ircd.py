@@ -48,6 +48,12 @@ VERSION = '0.0.2'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
 
+ENCODING = 'utf-8'
+FALLBACK_ENCODING = 'iso-8859-1'
+
+TWITTER_ENCODING = 'utf-8'
+
+
 # if more than MAX_USER_INFO_FETCH users are unknown, use /statuses/friends to fetch user info.
 # otherwise, just fetch individual user info
 
@@ -72,6 +78,17 @@ def hooks(fn):
             getattr(self, after)(*args, **kwargs)
         return r
     return call_with_hooks
+
+def try_unicode(s):
+    for e in (ENCODING, FALLBACK_ENCODING):
+        try:
+            return unicode(s, e)
+        except:
+            pass
+
+    # no success:
+    raise Exception("couldn't decode message as unicode")
+
 
 class IrcTarget:
     """Common class for IRC channels and users
@@ -537,8 +554,10 @@ class TwitterChannel(IrcChannel):
             self.forceRefresh(last)
             return
 
-        if len(msg) > LENGTH_LIMIT:
-            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d chars)' % (len(msg)))
+        msg = try_unicode(msg)
+        bytes = msg.encode(TWITTER_ENCODING)
+        if len(bytes) > LENGTH_LIMIT:
+            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d bytes)' % (len(bytes)))
             return
 
         def doit():
