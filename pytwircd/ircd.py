@@ -478,6 +478,7 @@ class TwitterChannel(IrcChannel):
 
         def finished(*args):
             dbg("Finished getting friend IDs")
+            self.proto.dbg("you are following %d people" % (len(ids)))
             users = [self.proto.get_twitter_user(id) for id in ids]
             dbg("Users: %r" % (users))
             self.proto.twitter_user_cache.fetch_friend_info(users)
