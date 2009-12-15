@@ -11,9 +11,11 @@ tweets appearing as messages on an IRC channel.
 Does it work?
 -------------
 
-Currently, it can only fetch your home timeline, but posting to Twitter
-sending/receiving Direct Messages, and advanced list/search/notification
-features are planned.
+It's currently on _alpha_ status, but it can already be used to fetch your home
+timeline and submit new posts.
+
+Sending/receiving Direct Messages, following/unfollowing/blocking people,
+advanced list/search/notification support, and other features are planned.
 
 
 What do I need to use it?
