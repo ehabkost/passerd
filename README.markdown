@@ -71,6 +71,7 @@ Credits
   * [Alexandre Possebom](http://twitter.com/possebom)
   * [Felipe Arruda](http://twitter.com/felipemiguel)
   * [Olavo Junior](http://twitter.com/olavojunior)
+  * [Tiago Salem Herrmann](http://twitter.com/tiagosh)
 * Some feature ideas were shamelessly borrowed from [tircd][tircd]
 
 
