@@ -44,7 +44,7 @@ from pytwircd.utils import full_entity_decode
 MYAGENT = 'Passerd'
 #FIXME: use a real hostname?
 MYHOST = 'passerd'
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
 
