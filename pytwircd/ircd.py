@@ -792,7 +792,9 @@ class PyTwircFactory(Factory):
 
 def run():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+    dbg("Starting Passerd. Will listen on port 6667")
     reactor.listenTCP(6667, PyTwircFactory(sys.argv[1]))
+    dbg("Protocol handler created. Starting Twisted reactor loop.")
     reactor.run()
 
 __all__ = ['run']
