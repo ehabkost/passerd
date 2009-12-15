@@ -474,7 +474,6 @@ class TwitterChannel(IrcChannel):
             self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
 
         def got_id(id):
-            dbg("Got friend id: %r" % (id))
             ids.append(int(id))
 
         def finished(*args):
