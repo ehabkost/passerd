@@ -793,7 +793,7 @@ class PyTwircProtocol(IRC):
 
         target.messageReceived(sender, msg)
 
-    def irc_unknown(self, cmd, prefix, params):
+    def irc_unknown(self, prefix, cmd, params):
         dbg("CMD! %r %r %r" % (prefix, cmd, params))
         self.dbg("Got unknown command: %r %r %r" % (prefix, cmd, params))
         self.send_reply(irc.ERR_UNKNOWNCOMMAND, cmd, ':Unknown command')
