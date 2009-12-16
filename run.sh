@@ -22,4 +22,4 @@ add_pypath "$mydir"
 export PYTHONPATH
 
 mkdir -p "$HOME/.passerd"
-"$mydir/bin/passerd" "$HOME/.passerd/data.sqlite"
+"$mydir/bin/passerd" "$HOME/.passerd/data.sqlite" "$@"
