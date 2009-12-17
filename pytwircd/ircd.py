@@ -605,9 +605,8 @@ class TwitterChannel(IrcChannel):
             return
 
         msg = try_unicode(msg)
-        bytes = msg.encode(TWITTER_ENCODING)
-        if len(bytes) > LENGTH_LIMIT:
-            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d bytes)' % (len(bytes)))
+        if len(msg) > LENGTH_LIMIT:
+            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
             return
 
         def doit():
