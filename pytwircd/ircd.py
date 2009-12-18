@@ -508,9 +508,12 @@ class TwitterIrcUserCache:
         dbg("fetch_friend_info: begin:")
         unknown_users = [u for u in users if not u.has_data()]
         dbg("fetch_friend_info: got unknown users...")
-        if len(unknown_users) > 0:
-            dbg("%d unknown users..." % (len(unknown_users)))
-            self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list" % (len(unknown_users)))
+        if len(unknown_users) == 0:
+            self.proto.notice("I already know all your friends. cool!")
+            return
+
+        dbg("%d unknown users..." % (len(unknown_users)))
+        self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list" % (len(unknown_users)))
 
         if len(unknown_users) < MAX_USER_INFO_FETCH:
             self.fetch_individual_user_info(unknown_users)
