@@ -726,17 +726,32 @@ class PyTwircProtocol(IRC):
         dbg("NICK %r" % (params))
         self.the_user.nick = params[0]
 
-    def irc_USER(self, prefix, params):
-        dbg("USER %r" % (params))
-        username,_,_,real_name = params[0:4]
-        self.the_user.username = username
-        self.the_user.real_name = real_name
+    def check_credentials(self):
+        ok = []
+        def doit():
+            self.notice("Checking Twitter credentials...")
+            self.api.verify_credentials(got_user).addCallbacks(done, error).addErrback(error)
 
-        #FIXME: refuse any other command before _USER, to avoid references to
-        # undefined attributes
-        self.api = Twitter(self.the_user.nick, self.password)
-        #FIXME; patch twitty-twister to accept agent=foobar
-        self.api.agent = MYAGENT
+        def got_user(u):
+            self.notice("Credentials OK!")
+            self.credentials_ok()
+            ok.append(1)
+
+        def done(*args):
+            if not ok:
+                self.notice("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :(")
+                self.send_reply(irc.ERR_FILEERROR, ":Error doing authentication on Twitter")
+                self.transport.loseConnection()
+
+        def error(e):
+            #FIXME: send proper numeric error reply
+            self.send_reply(irc.ERR_PASSWDMISMATCH, ":error validating Twitter credentials - %s" % (e.value))
+            self.transport.loseConnection()
+
+        doit()
+
+
+    def credentials_ok(self):
         self.user_data = self.data.get_user(self.the_user.nick, create=True)
 
         self.twitter_chan = TwitterChannel(self, '#twitter')
@@ -748,6 +763,21 @@ class PyTwircProtocol(IRC):
         self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
         self.welcomeUser()
+
+    def irc_USER(self, prefix, params):
+        dbg("USER %r" % (params))
+        username,_,_,real_name = params[0:4]
+        self.the_user.username = username
+        self.the_user.real_name = real_name
+
+        #FIXME: refuse any other command before _USER, to avoid references to
+        # undefined attributes
+        self.api = Twitter(self.the_user.nick, self.password)
+        #FIXME; patch twitty-twister to accept agent=foobar
+        self.api.agent = MYAGENT
+
+        self.check_credentials()
+
 
     def irc_PASS(self, p, args):
         self.password = args[0]
