@@ -36,10 +36,10 @@ from twisted.python import log
 
 from twittytwister.twitter import Twitter
 
-from pytwircd.data import DataStore, TwitterUserData
-from pytwircd.feeds import HomeTimelineFeed
-from pytwircd.callbacks import CallbackList
-from pytwircd.utils import full_entity_decode
+from passerd.data import DataStore, TwitterUserData
+from passerd.feeds import HomeTimelineFeed
+from passerd.callbacks import CallbackList
+from passerd.utils import full_entity_decode
 
 
 MYAGENT = 'Passerd'

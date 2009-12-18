@@ -30,7 +30,7 @@ import logging
 
 from twisted.internet import reactor, defer
 
-from pytwircd.callbacks import CallbackList
+from passerd.callbacks import CallbackList
 
 REFRESH_DELAY = 90
 QUERY_COUNT = 100
