@@ -575,6 +575,8 @@ class TwitterChannel(IrcChannel):
         return d
 
     def inviteUser(self, nickname):
+        #TODO: send a better error message if user is already being followed
+
         user_ids = []
         def doit():
             self.proto.api.follow_user(nickname, got_user_info).addCallbacks(done, error)
@@ -598,6 +600,8 @@ class TwitterChannel(IrcChannel):
         doit()
 
     def kickUser(self, sender, nickname):
+        #TODO: send a better error message if the user is not being followed
+
         user_ids = []
         def doit():
             self.proto.api.unfollow_user(nickname, got_user_info).addCallbacks(done, error)
