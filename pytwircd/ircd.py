@@ -491,7 +491,7 @@ class TwitterIrcUserCache:
                 return
 
             if len(reqs) > MAX_FRIEND_PAGE_REQS:
-                self.proto.notice("I already fetched %d pages of detailed friend info. I won't fetch more")
+                self.proto.notice("I already fetched %d pages of detailed friend info. I won't fetch more, sorry.")
                 return
 
             request_cursor(next)
@@ -510,7 +510,7 @@ class TwitterIrcUserCache:
         dbg("fetch_friend_info: got unknown users...")
         if len(unknown_users) > 0:
             dbg("%d unknown users..." % (len(unknown_users)))
-            self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list")
+            self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list" % (len(unknown_users))
 
         if len(unknown_users) < MAX_USER_INFO_FETCH:
             self.fetch_individual_user_info(unknown_users)
