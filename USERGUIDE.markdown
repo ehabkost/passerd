@@ -27,7 +27,7 @@ available:
 
 ### Special commands
 
-You can type special commands on the #twitter channel:
+You can type some special commands on the IRC channel:
 
 * `!` - force the Twitter timeline to be fetched imeediately
 * `!!` - force the Twitter timeline to be fetched, _including older posts_
