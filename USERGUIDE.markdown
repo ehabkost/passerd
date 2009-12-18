@@ -23,3 +23,11 @@ available:
 * Sending new updates to Twitter is as simple as sending a message to the channel
 * Your friends timeline will appear as IRC messages on the channel
 * You can follow/unfollow people using the IRC `/kick` and `/invite` commands
+
+
+### Special commands
+
+You can type special commands on the #twitter channel:
+
+* `!` - force the Twitter timeline to be fetched imeediately
+* `!!` - force the Twitter timeline to be fetched, _including older posts_
