@@ -31,14 +31,4 @@ These dependencies currently match the 2010.0 release but should be ok for other
 How do I run it?
 ----------------
 
-* Check out the git repository
-* Run `git submodule init`
-* Run `git submodule update`
-* Run `./run.sh`
-* Point your IRC client to server `localhost`, port 6667, using your
-  Twitter login as nickname, and your Twitter password as password
-* Join the `#twitter` channel on the server
-* Have fun!
-
-
-
+See the `USERGUIDE` file for more information.

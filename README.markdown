@@ -11,20 +11,20 @@ tweets appearing as messages on an IRC channel.
 Does it work?
 -------------
 
-It's currently on _alpha_ status, but it can already be used to fetch your home
-timeline and submit new posts.
+Yes! You can read posts from the people you follow, post new updates to
+Twitter, and follow/unfollow people easily using just IRC commands.
 
-Sending/receiving Direct Messages, following/unfollowing/blocking people,
-advanced list/search/notification support, and other features are planned.
+See the `USERGUIDE` file for more information.
+
 
 
 Install instructions
 --------------------
 
-See the INSTALL file.
+See the `INSTALL` file.
 
 
 Credits
 -------
 
-See the CREDITS file.
+See the `CREDITS` file.
