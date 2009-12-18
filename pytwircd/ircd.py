@@ -59,6 +59,10 @@ TWITTER_ENCODING = 'utf-8'
 
 MAX_USER_INFO_FETCH = 0  # individual fetch is not implemented yet...
 
+# the maximum number of sequential friend list page requests:
+MAX_FRIEND_PAGE_REQS = 10
+
+
 LENGTH_LIMIT = 140
 
 dbg = logging.debug
@@ -362,6 +366,9 @@ class TwitterUserCache:
         i.name = name
         return self._update_user_info(id, i)
 
+    def got_api_user_info(self, u):
+        self.update_user_info(u.id, u.screen_name, u.name)
+
     def lookup_id(self, id):
         id = int(id)
         #FIXME: encapsulate the following session operations, somehow:
@@ -452,9 +459,50 @@ class TwitterIrcUserCache:
         # found on the DB, but not on our list:
         return self._new_user(id)
 
-    def fetch_all_friend_info(self, unknown_users):
+    def fetch_individual_user_info(self, unknown_users):
         #TODO: implement me
         pass
+
+    def fetch_all_friend_info(self, unknown_users):
+        reqs = []
+        def request_cursor(cursor):
+            self.proto.dbg("requesting a page from the friend list: %s" % (str(cursor)))
+            reqs.append(cursor)
+            self.proto.api.list_friends(got_user, params={'cursor':cursor},
+                                        page_delegate=end_page).addCallbacks(done, error)
+
+        def got_user(u):
+            self.proto.user_cache.got_api_user_info(u)
+
+        def end_page(next, prev):
+            unk = [u for u in unknown_users if not u.has_data()]
+            num = len(unk)
+
+            if num == 0:
+                self.proto.notice("I know all of your friends, now!")
+                return
+
+            self.proto.dbg("%d users are still unknown" % (num))
+
+            if not next or next == '0':
+                self.proto.dbg("yay! that was the last page!")
+                if num > 0:
+                    self.proto.notice("something seems to be wrong: I fetched all pages and I still don't know all of your friends")
+                return
+
+            if len(reqs) > MAX_FRIEND_PAGE_REQS:
+                self.proto.notice("I already fetched %d pages of detailed friend info. I won't fetch more")
+                return
+
+            request_cursor(next)
+
+        def done(*args):
+            self.proto.dbg("list_friends api request finished")
+
+        def error(e):
+            self.proto.dbg("list_friends error: %s" % (e))
+
+        request_cursor('-1')
 
     def fetch_friend_info(self, users):
         dbg("fetch_friend_info: begin:")
@@ -462,10 +510,8 @@ class TwitterIrcUserCache:
         dbg("fetch_friend_info: got unknown users...")
         if len(unknown_users) > 0:
             dbg("%d unknown users..." % (len(unknown_users)))
-            self.proto.notice("Sorry, there are %d users whose info I don't know yet. This will be fixed soon" % (len(unknown_users)))
-        return
+            self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list")
 
-        #TODO: implement me
         if len(unknown_users) < MAX_USER_INFO_FETCH:
             self.fetch_individual_user_info(unknown_users)
         else:
@@ -521,7 +567,7 @@ class TwitterChannel(IrcChannel):
     def got_entry(self, e):
         dbg("#twitter got_entry: %r" % (e))
         u = e.user
-        self.proto.user_cache.update_user_info(u.id, u.screen_name, u.name)
+        self.proto.user_cache.got_api_user_info(u)
         self.printEntry(e)
 
     def refresh_error(self, e):
