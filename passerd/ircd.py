@@ -532,19 +532,32 @@ class TwitterChannel(IrcChannel):
     def topic(self):
         return "Passerd -- Twitter home timeline channel"
 
+    def get_friend_list(self):
+        d = defer.Deferred()
+        ids = set()
+
+        def doit():
+            self.proto.dbg("requesting list of friends...")
+            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
+
+        def got_id(id):
+            ids.add(int(id))
+
+        def finished(*args):
+            d.callback(ids)
+
+        doit()
+        return d
+
     def list_members(self):
         d = defer.Deferred()
         ids = []
 
         def doit():
             dbg("requesting friend IDs")
-            self.proto.dbg("requesting list of friends...")
-            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
+            self.get_friend_list().addCallbacks(got_list, d.errback)
 
-        def got_id(id):
-            ids.append(int(id))
-
-        def finished(*args):
+        def got_list(ids):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(ids)))
             users = [self.proto.get_twitter_user(id) for id in ids]
