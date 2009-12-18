@@ -234,6 +234,8 @@ class IrcChannel(IrcTarget):
 
     def notifyJoin(self, who):
         self.proto.send_message(who, 'JOIN', self.name)
+    def notifyKick(self, kicker, kicked):
+        self.proto.send_message(kicker, 'KICK', self.name, kicked.nick)
     def notifyPart(self, who, reason):
         if reason is not None:
             self.proto.send_message(who, 'PART', self.name, reason)
@@ -289,6 +291,11 @@ class IrcChannel(IrcTarget):
 
     def topic(self):
         return "[no topic set]"
+
+    def kickUsers(self, sender, users):
+        for u in users:
+            self.kickUser(sender, u)
+
 
 class IrcServer(IrcTarget):
     """An IrcTarget used for server messages"""
@@ -590,6 +597,30 @@ class TwitterChannel(IrcChannel):
 
         doit()
 
+    def kickUser(self, sender, nickname):
+        user_ids = []
+        def doit():
+            self.proto.api.unfollow_user(nickname, got_user_info).addCallbacks(done, error)
+
+        def got_user_info(u):
+            user_ids.append(u.id)
+            self.proto.user_cache.got_api_user_info(u)
+            u = self.proto.twitter_user_cache.user_from_id(u.id)
+            self.notifyKick(sender, u)
+
+        def done(*args):
+            if not user_ids:
+                self.proto.notice("unfollow: got reply but no user info!?")
+                return
+            self.proto.dbg("unfollow request for %s done" % (nickname))
+
+        def error(e):
+            self.proto.notice('error when trying to unfollow user: %s' % (e.value))
+            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
+
+        doit()
+
+
     def printEntry(self, entry):
         u = self.proto.get_twitter_user(entry.user.id)
         text = entry.text
@@ -751,6 +782,14 @@ class PyTwircProtocol(IRC):
         chan = self.get_channel(cname)
         if chan is not None:
             chan.inviteUser(nick)
+
+    def irc_KICK(self, prefix, params):
+        chans = params[0].split(',')
+        users = params[1].split(',')
+        for cname in chans:
+            chan = self.get_channel(cname)
+            if chan is not None:
+                chan.kickUsers(self.the_user, users)
 
     def leave_channel(self, cname, reason):
         channel = self.get_channel(cname)
