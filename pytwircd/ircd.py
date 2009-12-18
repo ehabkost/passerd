@@ -25,6 +25,7 @@
 # THE SOFTWARE.
 
 import sys, logging
+import optparse
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import IRC
@@ -887,11 +888,31 @@ class PyTwircFactory(Factory):
         self.data.create_tables()
         self.user_cache = TwitterUserCache(self)
 
+def parse_options(args):
+    def parse_hostport(option, optstr, value, parser):
+        try:
+            host, rawport = value.rsplit(":")
+            port = int(rawport)
+        except ValueError:
+            parser.error("invalid listen address, expected HOST:PORT")
+        parser.values.listen = (host, port)
+    parser = optparse.OptionParser("%prog [options] <database path>")
+    parser.add_option("-l", "--listen", type="string",
+            action="callback", callback=parse_hostport,
+            default=("0.0.0.0", 6667),
+            metavar="HOST:PORT", help="listen address")
+    opts, args = parser.parse_args(args)
+    if not args:
+        parser.error("the database path is needed!")
+    opts.database = args[0]
+    return opts
 
 def run():
+    opts = parse_options(sys.argv[1:])
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
-    dbg("Starting Passerd. Will listen on port 6667")
-    reactor.listenTCP(6667, PyTwircFactory(sys.argv[1]))
+    dbg("Starting Passerd. Will listen on port %s:%d" % opts.listen)
+    reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
+             factory=PyTwircFactory(opts.database))
     dbg("Protocol handler created. Starting Twisted reactor loop.")
     reactor.run()
 
