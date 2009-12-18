@@ -567,6 +567,29 @@ class TwitterChannel(IrcChannel):
         doit()
         return d
 
+    def inviteUser(self, nickname):
+        user_ids = []
+        def doit():
+            self.proto.api.follow_user(nickname, got_user_info).addCallbacks(done, error)
+
+        def got_user_info(u):
+            user_ids.append(u.id)
+            self.proto.user_cache.got_api_user_info(u)
+            u = self.proto.twitter_user_cache.user_from_id(u.id)
+            self.notifyJoin(u)
+
+        def done(*args):
+            if not user_ids:
+                self.proto.notice("follow: got reply but no user info!?")
+                return
+            self.proto.dbg("follow request for %s done" % (nickname))
+
+        def error(e):
+            self.proto.notice('error when trying to follow user: %s' % (e.value))
+            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
+
+        doit()
+
     def printEntry(self, entry):
         u = self.proto.get_twitter_user(entry.user.id)
         text = entry.text
@@ -721,6 +744,13 @@ class PyTwircProtocol(IRC):
         channel = self.get_channel(cname)
         if channel is not None:
             channel.userJoined(self.the_user)
+
+    def irc_INVITE(self, prefix, params):
+        nick = params[0]
+        cname = params[1]
+        chan = self.get_channel(cname)
+        if chan is not None:
+            chan.inviteUser(nick)
 
     def leave_channel(self, cname, reason):
         channel = self.get_channel(cname)
