@@ -903,6 +903,7 @@ class PyTwircProtocol(IRC):
             yield u
 
     def who_matches(self, mask):
+        #TODO: make WHO list channel users
         for u in self.mask_matches(mask):
             #XXX: WTF do "H" and "G" mean?
             yield ('*', u.username, u.hostname, self.myhost, u.nick, 'H', ':0', u.real_name)
