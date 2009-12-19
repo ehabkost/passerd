@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# PyTwirc - An IRC server as a gateway to Twitter
+# Passerd - An IRC server as a gateway to Twitter
 #
 # Persistent state & settings module
 #

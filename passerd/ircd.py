@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# PyTwirc - An IRC server as a gateway to Twitter
+# Passerd - An IRC server as a gateway to Twitter
 #
 # Author: Eduardo Habkost <ehabkost@raisama.net>
 #
@@ -724,7 +724,7 @@ class TwitterChannel(IrcChannel):
         #TODO: make the behavior of "/me" messages configurable
         self.sendTwitterUpdate('/me %s' % (arg))
 
-class PyTwircProtocol(IRC):
+class PasserdProtocol(IRC):
     def connectionMade(self):
         IRC.connectionMade(self)
 
@@ -1018,8 +1018,8 @@ class PyTwircProtocol(IRC):
         self.send_reply(irc.ERR_UNKNOWNCOMMAND, cmd, ':Unknown command')
 
 
-class PyTwircFactory(Factory):
-    protocol = PyTwircProtocol
+class PasserdFactory(Factory):
+    protocol = PasserdProtocol
 
     def __init__(self, dbpath):
         url = 'sqlite:///%s' % (dbpath)
@@ -1051,7 +1051,7 @@ def run():
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     dbg("Starting Passerd. Will listen on port %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
-             factory=PyTwircFactory(opts.database))
+             factory=PasserdFactory(opts.database))
     dbg("Protocol handler created. Starting Twisted reactor loop.")
     reactor.run()
 
