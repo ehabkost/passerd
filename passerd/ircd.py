@@ -1031,6 +1031,7 @@ class PasserdGlobalOptions:
     def __init__(self):
         # set the defaults
         self.listen = ('0.0.0.0', 6667)
+        self.loglevel = logging.DEBUG
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -1053,7 +1054,7 @@ def parse_cmdline(args, opts):
 def run():
     opts = PasserdGlobalOptions()
     parse_cmdline(sys.argv[1:], opts)
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, level=opts.loglevel)
     dbg("Starting Passerd. Will listen on address %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
              factory=PasserdFactory(opts.database))
