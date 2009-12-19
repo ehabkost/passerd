@@ -580,6 +580,7 @@ class TwitterChannel(IrcChannel):
         user_ids = []
         def doit():
             self.proto.api.follow_user(nickname, got_user_info).addCallbacks(done, error)
+            self.proto.send_reply(irc.RPL_INVITING, self.name, nickname)
 
         def got_user_info(u):
             user_ids.append(u.id)
