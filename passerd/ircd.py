@@ -160,6 +160,18 @@ class IrcTarget:
         else:
             self.modeFlagRequest(self, args[1:])
 
+    def ctcp_unknown(self, tag, data):
+        dbg("Unsupported CTCP query: %r %r" % (tag, data))
+
+    def ctcpQueryReceived(self, sender, query):
+        for tag,data in query:
+            m = getattr(self, 'ctcp_%s' % (tag), None)
+            if m is not None:
+                m(data)
+            else:
+                self.ctcp_unknown(tag, data)
+
+
 class IrcUser(IrcTarget):
     supported_modes = SUPPORTED_USER_MODES
 
@@ -688,6 +700,9 @@ class TwitterChannel(IrcChannel):
             self.forceRefresh(last)
             return
 
+        self.sendTwitterUpdate(msg)
+
+    def sendTwitterUpdate(self, msg):
         msg = try_unicode(msg)
         if len(msg) > LENGTH_LIMIT:
             self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
@@ -704,6 +719,10 @@ class TwitterChannel(IrcChannel):
 
         doit()
 
+    def ctcp_ACTION(self, arg):
+        dbg("ACTION: %r" % (arg))
+        #TODO: make the behavior of "/me" messages configurable
+        self.sendTwitterUpdate('/me %s' % (arg))
 
 class PyTwircProtocol(IRC):
     def connectionMade(self):
@@ -983,7 +1002,15 @@ class PyTwircProtocol(IRC):
             self.send_reply(irc.ERR_NOSUCHNICK, tname, ':No such nick/channel')
             return
 
-        target.messageReceived(sender, msg)
+        # CTCP data:
+        if msg[0]==irc.X_DELIM:
+            m = irc.ctcpExtract(msg)
+            if m['extended']:
+                target.ctcpQueryReceived(sender, m['extended'])
+            # I won't handle the m['normal'] part. I don't trust this level of
+            # crazyness on the protocol
+        else:
+            target.messageReceived(sender, msg)
 
     def irc_unknown(self, prefix, cmd, params):
         dbg("CMD! %r %r %r" % (prefix, cmd, params))
