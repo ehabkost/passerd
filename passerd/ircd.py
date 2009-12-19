@@ -1030,7 +1030,7 @@ class PyTwircFactory(Factory):
 def parse_options(args):
     def parse_hostport(option, optstr, value, parser):
         try:
-            host, rawport = value.rsplit(":")
+            host, rawport = value.rsplit(":", 1)
             port = int(rawport)
         except ValueError:
             parser.error("invalid listen address, expected HOST:PORT")
