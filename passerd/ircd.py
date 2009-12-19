@@ -166,6 +166,9 @@ class IrcUser(IrcTarget):
     def __init__(self, proto):
         self.proto = proto
 
+    def __cmp__(self, o):
+        return cmp(self.nick, o.nick)
+
     def target_name(self):
         return self.nick
 
@@ -228,6 +231,10 @@ class IrcChannel(IrcTarget):
         """Return '@', '*', or '=', for RPL_NAMREPLY"""
         return '=' # show channel as public by default
 
+    def userModeChar(self, user):
+        """Retuern '', '@', or '+', depending on user mode"""
+        return ''
+
     def fullModeSpec(self):
         # return no modes, by default
         return ''
@@ -254,7 +261,7 @@ class IrcChannel(IrcTarget):
             namelist[:] = []
 
         for m in members:
-            namelist.append(m.nick)
+            namelist.append('%s%s' % (self.userModeChar(m), m.nick))
             if len(namelist) > 30:
                 flush()
         flush()
@@ -555,6 +562,11 @@ class TwitterChannel(IrcChannel):
 
         doit()
         return d
+
+    def userModeChar(self, u):
+        if u == self.proto.the_user:
+            return '@'
+        return ''
 
     def list_members(self):
         d = defer.Deferred()
