@@ -487,7 +487,7 @@ class TwitterIrcUserCache:
                                         page_delegate=end_page).addCallbacks(done, error)
 
         def got_user(u):
-            self.proto.user_cache.got_api_user_info(u)
+            self.proto.global_twuser_cache.got_api_user_info(u)
 
         def end_page(next, prev):
             unk = [u for u in unknown_users if not u.has_data()]
@@ -580,7 +580,7 @@ class TwitterChannel(IrcChannel):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(ids)))
             users = [self.proto.get_twitter_user(id) for id in ids]
-            self.proto.twitter_user_cache.fetch_friend_info(users)
+            self.proto.twitter_users.fetch_friend_info(users)
             d.callback([self.proto.the_user]+users)
 
         doit()
@@ -596,8 +596,8 @@ class TwitterChannel(IrcChannel):
 
         def got_user_info(u):
             user_ids.append(u.id)
-            self.proto.user_cache.got_api_user_info(u)
-            u = self.proto.twitter_user_cache.user_from_id(u.id)
+            self.proto.global_twuser_cache.got_api_user_info(u)
+            u = self.proto.twitter_users.user_from_id(u.id)
             self.notifyJoin(u)
 
         def done(*args):
@@ -621,8 +621,8 @@ class TwitterChannel(IrcChannel):
 
         def got_user_info(u):
             user_ids.append(u.id)
-            self.proto.user_cache.got_api_user_info(u)
-            u = self.proto.twitter_user_cache.user_from_id(u.id)
+            self.proto.global_twuser_cache.got_api_user_info(u)
+            u = self.proto.twitter_users.user_from_id(u.id)
             self.notifyKick(sender, u)
 
         def done(*args):
@@ -655,7 +655,7 @@ class TwitterChannel(IrcChannel):
     def got_entry(self, e):
         dbg("#twitter got_entry: %r" % (e))
         u = e.user
-        self.proto.user_cache.got_api_user_info(u)
+        self.proto.global_twuser_cache.got_api_user_info(u)
         self.printEntry(e)
 
     def refresh_error(self, e):
@@ -716,8 +716,8 @@ class PyTwircProtocol(IRC):
         self.password = None
         self.api = None
 
-        self.user_cache = self.factory.user_cache
-        self.twitter_user_cache = TwitterIrcUserCache(self, self.user_cache)
+        self.global_twuser_cache = self.factory.global_twuser_cache
+        self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
 
         self.my_irc_server = IrcServer(self.myhost)
 
@@ -745,7 +745,7 @@ class PyTwircProtocol(IRC):
         return self.data.set_var(self.user_data, var, value)
 
     def get_twitter_user(self, id):
-        return self.twitter_user_cache.user_from_id(id)
+        return self.twitter_users.user_from_id(id)
 
     def dbg(self, msg):
         self.notice(msg)
@@ -931,8 +931,8 @@ class PyTwircProtocol(IRC):
 
         def got_user(tu):
             self.dbg("got user info!")
-            self.user_cache.got_api_user_info(tu)
-            u = self.twitter_user_cache.user_from_id(tu.id)
+            self.global_twuser_cache.got_api_user_info(tu)
+            u = self.twitter_users.user_from_id(tu.id)
             self.whois_twitter_user(u, tu)
 
         def error(e):
@@ -998,7 +998,7 @@ class PyTwircFactory(Factory):
         url = 'sqlite:///%s' % (dbpath)
         self.data = DataStore(url)
         self.data.create_tables()
-        self.user_cache = TwitterUserCache(self)
+        self.global_twuser_cache = TwitterUserCache(self)
 
 def parse_options(args):
     def parse_hostport(option, optstr, value, parser):
