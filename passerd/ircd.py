@@ -913,19 +913,32 @@ class PyTwircProtocol(IRC):
             self.send_reply(irc.RPL_WHOREPLY, *m)
         self.send_reply(irc.RPL_ENDOFWHO, ':End of WHO list')
 
-    def whois_user(self, u):
+    def whois_twitter_user(self, u, tu):
         self.send_reply(irc.RPL_WHOISUSER, u.nick, u.username, u.hostname, '*', ':%s' % (u.real_name))
-        #TODO: send extended whois info (Twitter info) somehow
-        #      - maybe just a note about using a better command on an #admin channel
+        #FIXME: find a better way to send user information, instead of RPL_AWAY
+        #      - maybe just a pointer to a #!userinfo-nickname channel, where this info is available
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Location: %s' % (tu.location).encode(ENCODING))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':URL: %s' % (tu.url).encode(ENCODING))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Bio: %s' % (tu.description).encode(ENCODING))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Last update: %s' % (tu.status.text).encode(ENCODING))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Twitter URL: http://twitter.com/%s' % (tu.screen_name).encode(ENCODING))
         self.send_reply(irc.RPL_ENDOFWHOIS, u.nick, ':End of WHOIS')
 
     def whois_mask(self, mask):
-        u = self.get_user(mask)
-        if u is None:
-            self.send_reply(irc.ERR_NOSUCHNICK, mask, ':No suck nick/channel')
-            return
+        def doit():
+            self.dbg("fetching user info for %s" % (mask))
+            self.api.show_user(mask).addCallback(got_user).addErrback(error)
 
-        self.whois_user(u)
+        def got_user(tu):
+            self.dbg("got user info!")
+            self.user_cache.got_api_user_info(tu)
+            u = self.twitter_user_cache.user_from_id(tu.id)
+            self.whois_twitter_user(u, tu)
+
+        def error(e):
+            self.send_reply(irc.ERR_NOSUCHNICK, mask, ':Error fetching user info - %s' % (e.value))
+
+        doit()
 
     def irc_WHOIS(self, p, args):
         if len(args) > 2:
