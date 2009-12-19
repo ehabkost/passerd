@@ -67,6 +67,7 @@ MAX_FRIEND_PAGE_REQS = 10
 LENGTH_LIMIT = 140
 
 dbg = logging.debug
+pinfo = logging.info
 
 
 def hooks(fn):
@@ -1029,9 +1030,15 @@ class PasserdFactory(Factory):
 
 class PasserdGlobalOptions:
     def __init__(self):
-        # set the defaults
+        # set the defaults:
+
         self.listen = ('0.0.0.0', 6667)
-        self.loglevel = logging.DEBUG
+
+        #logging:
+        self.logstream = sys.stderr
+        self.loglevel = logging.INFO
+        # sqlalchemy is too verbose on the INFO loglevel
+        self.dbloglevel = logging.ERROR
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -1041,24 +1048,48 @@ def parse_cmdline(args, opts):
         except ValueError:
             parser.error("invalid listen address, expected HOST:PORT")
         opts.listen = (host, port)
+
+    def set_loglevels(level, dblevel):
+        opts.loglevel = level
+        opts.dbloglevel = dblevel
+
     parser = optparse.OptionParser("%prog [options] <database path>")
     parser.add_option("-l", "--listen", type="string",
             action="callback", callback=parse_hostport,
             metavar="HOST:PORT", help="listen address")
+    parser.add_option("-D", "--debug",
+            action="callback", callback=lambda *args: set_loglevels(logging.DEBUG, logging.DEBUG),
+            help="Enable debug logging")
     _, args = parser.parse_args(args)
     if not args:
         parser.error("the database path is needed!")
     opts.database = args[0]
     return opts
 
+def setup_logging(opts):
+
+    ch = logging.StreamHandler(opts.logstream)
+    f = logging.Formatter(logging.BASIC_FORMAT)
+    ch.setFormatter(f)
+
+    # root logger:
+    r = logging.getLogger()
+    r.addHandler(ch)
+    r.setLevel(opts.loglevel)
+
+    #sqlalchemy logging:
+    l = logging.getLogger('sqlalchemy').setLevel(opts.dbloglevel)
+
+
 def run():
     opts = PasserdGlobalOptions()
     parse_cmdline(sys.argv[1:], opts)
-    logging.basicConfig(stream=sys.stderr, level=opts.loglevel)
-    dbg("Starting Passerd. Will listen on address %s:%d" % opts.listen)
+    setup_logging(opts)
+
+    pinfo("Starting Passerd. Will listen on address %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
              factory=PasserdFactory(opts.database))
-    dbg("Protocol handler created. Starting Twisted reactor loop.")
+    pinfo("Starting Twisted reactor loop.")
     reactor.run()
 
 __all__ = ['run']

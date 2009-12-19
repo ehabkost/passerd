@@ -33,8 +33,6 @@ from sqlalchemy.orm.exc import NoResultFound
 
 
 
-DEBUG=True
-
 Base = declarative_base()
 
 class User(Base):
@@ -70,7 +68,7 @@ class TwitterUserData(Base):
 
 class DataStore:
     def __init__(self, url):
-        self.engine = create_engine(url, echo=DEBUG)
+        self.engine = create_engine(url)
         self.session = sessionmaker(bind=self.engine)()
 
     def create_tables(self):
