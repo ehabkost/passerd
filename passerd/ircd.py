@@ -790,9 +790,9 @@ class PasserdProtocol(IRC):
 
 
     def connectionLost(self, reason):
+        pinfo("connection to %s lost: %s", self.hostname, reason)
         self.userQuit(reason)
         IRC.connectionLost(self, reason)
-        dbg("Lost client: %r" % (reason))
 
     def user_var(self, var):
         return self.data.get_var(self.user_data, var)
