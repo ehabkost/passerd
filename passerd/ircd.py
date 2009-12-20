@@ -306,6 +306,10 @@ class IrcChannel(IrcTarget):
     def userLeft(self, user, reason):
         self.notifyPart(user, reason)
 
+    @hooks
+    def userQuit(self, user, reason):
+        pass
+
     def messageReceived(self, sender, msg):
         raise NotImplementedError("Channel %s doesn't handle incoming messages" % (self.name))
 
@@ -679,8 +683,15 @@ class TwitterChannel(IrcChannel):
         dbg("user %s has joined!" % (user.full_id()))
         self.feed.start_refreshing()
 
-    def beforeUserLeft(self, user, reason):
+    def stop(self):
+        dbg("stopping refresh of %s channel", self.name)
         self.feed.stop_refreshing()
+
+    def beforeUserLeft(self, user, reason):
+        self.stop()
+
+    def beforeUserQuit(self, user, reason):
+        self.stop()
 
     def forceRefresh(self, last):
         def doit():
@@ -738,6 +749,7 @@ class TwitterChannel(IrcChannel):
 class PasserdProtocol(IRC):
     def connectionMade(self):
         IRC.connectionMade(self)
+        pinfo("Got connection from %s", self.hostname)
 
         self.data = self.factory.data
 
@@ -850,6 +862,16 @@ class PasserdProtocol(IRC):
             reason = params[1]
         for c in chans.split(','):
             self.leave_channel(c, reason)
+
+    def irc_QUIT(self, pref, params):
+        reason = None
+        if len(params) > 0:
+            reason = params[0]
+
+        #FIXME: track which users the user is really on
+        self.twitter_chan.userQuit(self.the_user, reason)
+        self.sendMessage('ERROR', ':Quit command received')
+        self.transport.loseConnection()
 
     def irc_NICK(self, prefix, params):
         dbg("NICK %r" % (params))
