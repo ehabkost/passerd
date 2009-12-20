@@ -748,6 +748,8 @@ class TwitterChannel(IrcChannel):
 
 class PasserdProtocol(IRC):
     def connectionMade(self):
+        self.quit_sent = False
+
         IRC.connectionMade(self)
         pinfo("Got connection from %s", self.hostname)
 
@@ -776,7 +778,19 @@ class PasserdProtocol(IRC):
     def welcomeUser(self):
         self.twitter_chan.userJoined(self.the_user)
 
+    def _userQuit(self, reason):
+        #FIXME: keep track of the channels where the user is on
+        self.twitter_chan.userQuit(self.the_user, reason)
+        self.quit_sent = True
+
+    def userQuit(self, reason):
+        if not self.quit_sent:
+            self._userQuit(reason)
+            self.quit_sent = True
+
+
     def connectionLost(self, reason):
+        self.userQuit(reason)
         IRC.connectionLost(self, reason)
         dbg("Lost client: %r" % (reason))
 
@@ -868,8 +882,7 @@ class PasserdProtocol(IRC):
         if len(params) > 0:
             reason = params[0]
 
-        #FIXME: track which users the user is really on
-        self.twitter_chan.userQuit(self.the_user, reason)
+        self.userQuit(reason)
         self.sendMessage('ERROR', ':Quit command received')
         self.transport.loseConnection()
 
