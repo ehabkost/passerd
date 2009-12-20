@@ -24,7 +24,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import sys, logging
+import sys, logging, time
 import optparse
 
 from twisted.words.protocols import irc
@@ -693,13 +693,23 @@ class TwitterChannel(IrcChannel):
 
         doit()
 
+    def commandReceived(self, cmd):
+        """Handle lines starting with '!'
+        """
+        if cmd == '' or cmd == '!':
+            last = None
+            if cmd == '!':
+                last = 0
+            return self.forceRefresh(last)
+
+        if cmd == 'rate':
+            api = self.proto.api
+            self.proto.notice('Rate limit: %d. remaining: %d. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
+            return
+
     def messageReceived(self, sender, msg):
         if msg.startswith('!'):
-            last = None
-            if msg.startswith('!!'):
-                last = 0
-            self.forceRefresh(last)
-            return
+            return self.commandReceived(msg[1:])
 
         self.sendTwitterUpdate(msg)
 
