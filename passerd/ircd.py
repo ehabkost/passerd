@@ -773,11 +773,12 @@ class ListChannel(TwitterChannel):
         members = set()
 
         def doit():
-            self.proto.dbg("requesting list of friends...")
+            self.proto.dbg('requesting list of members for @%s/%s' %
+                    (self.list_user, self.list_name))
             self.proto.api.list_members(got_member, self.list_user,
                     self.list_name).addCallbacks(finished, d.errback)
 
-        def got_id(member):
+        def got_member(member):
             members.add(member)
 
         def finished(*args):
@@ -790,23 +791,25 @@ class ListChannel(TwitterChannel):
     def __asIrcUser(self, member):
         u = IrcUser(self.proto)
         u.nick = member.screen_name
-        raise NotImplementedError
+        u.username = member.screen_name
+        u.hostname = self.proto.hostname
+        u.real_name = member.name
+        return u
 
     def list_members(self):
         d = defer.Deferred()
         ids = []
 
         def doit():
-            dbg("requesting friend IDs")
+            dbg("requesting members for list")
             self.get_member_list().addCallbacks(got_list, d.errback)
 
         def got_list(members):
-            dbg("Finished getting friend IDs")
+            dbg("Finished getting members list")
             self.proto.dbg("you are following %d people" % (len(members)))
-            import pdb; pdb.set_trace()
             users = [self.__asIrcUser(m) for m in members]
             #self.proto.twitter_users.fetch_friend_info(users)
-            d.callback([self.proto.the_user]+list(members))
+            d.callback([self.proto.the_user]+users)
 
         doit()
         return d
