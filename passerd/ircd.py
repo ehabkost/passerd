@@ -555,11 +555,11 @@ class TwitterIrcUserCache:
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.feed = self._timeline_feed(proto)
+        self.feed = self.__timelineFeed(proto)
         self.feed.addCallback(self.got_entry)
         self.feed.addErrback(self.refresh_error)
 
-    def _timeline_feed(self, proto):
+    def __timelineFeed(self, proto):
         raise NotImplementedError
 
     def topic(self):
@@ -751,7 +751,7 @@ class TwitterChannel(IrcChannel):
 class MainChannel(TwitterChannel):
     """The #twitter channel"""
 
-    def _timeline_feed(self, proto):
+    def __timelineFeed(self, proto):
         return HomeTimelineFeed(proto)
 
 class ListChannel(TwitterChannel):
@@ -762,7 +762,7 @@ class ListChannel(TwitterChannel):
         self.list_user = list_user
         self.list_name = list_name
 
-    def _timeline_feed(self, proto):
+    def __timelineFeed(self, proto):
         return ListTimelineFeed(proto)
 
     def get_member_list(self):
