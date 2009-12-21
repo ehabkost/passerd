@@ -142,3 +142,44 @@ class HomeTimelineFeed:
     def start_refreshing(self):
         self.continue_refreshing = True
         self.refresh()
+
+class ListTimelineFeed(HomeTimelineFeed):
+
+    def _refresh(self, last_status=None):
+        if last_status is None:
+            last_status = self.last_status_id
+
+        entries = []
+        d = defer.Deferred()
+
+        def doit():
+            args = {}
+            if last_status:
+                args['since_id'] = last_status
+            args['count'] = str(QUERY_COUNT)
+            dbg("will try to use the API:")
+
+            self.api.home_timeline(got_entry, args).addCallbacks(finished, error)
+            dbg("_refresh returning")
+
+        def error(*args):
+            dbg("_refresh error %r" % (args,))
+            self.errbacks.callback(*args)
+            d.errback(*args)
+
+        # store the entries and then show them in chronological order:
+        def got_entry(e):
+            dbg("got an entry: %r" % (repr(e)))
+            entries.insert(0, e)
+
+        def finished(*args):
+            dbg("finished loading %r" % (args,))
+            for e in entries:
+                self.callbacks.callback(e)
+                if e.id > self.last_status_id:
+                    self.last_status_id = e.id
+                    self.proto.set_user_var('home_last_status_id', self.last_status_id)
+            d.callback(len(entries))
+
+        doit()
+        return d

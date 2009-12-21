@@ -37,7 +37,7 @@ from twisted.python import log
 from twittytwister.twitter import Twitter
 
 from passerd.data import DataStore, TwitterUserData
-from passerd.feeds import HomeTimelineFeed
+from passerd.feeds import HomeTimelineFeed, ListTimelineFeed
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 
@@ -553,12 +553,14 @@ class TwitterIrcUserCache:
             self.fetch_all_friend_info(unknown_users)
 
 class TwitterChannel(IrcChannel):
-    """The #twitter channel"""
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.feed = HomeTimelineFeed(proto)
+        self.feed = self._timeline_feed(proto)
         self.feed.addCallback(self.got_entry)
         self.feed.addErrback(self.refresh_error)
+
+    def _timeline_feed(self, proto):
+        raise NotImplementedError
 
     def topic(self):
         return "Passerd -- Twitter home timeline channel"
@@ -746,6 +748,76 @@ class TwitterChannel(IrcChannel):
         #TODO: make the behavior of "/me" messages configurable
         self.sendTwitterUpdate('/me %s' % (arg))
 
+class MainChannel(TwitterChannel):
+    """The #twitter channel"""
+
+    def _timeline_feed(self, proto):
+        return HomeTimelineFeed(proto)
+
+class ListChannel(TwitterChannel):
+
+    def __init__(self, proto, list_user, list_name):
+        refname = "@%s/%s" % (list_user, list_name)
+        TwitterChannel(proto, refname)
+        self.list_user = list_user
+        self.list_name = list_name
+
+    def _timeline_feed(self, proto):
+        return ListTimelineFeed(proto)
+
+    def get_member_list(self):
+        d = defer.Deferred()
+        members = set()
+
+        def doit():
+            self.proto.dbg("requesting list of friends...")
+            self.proto.api.list_members(got_member, self.list_user,
+                    self.list_name).addCallbacks(finished, d.errback)
+
+        def got_id(member):
+            members.add(member)
+
+        def finished(*args):
+            d.callback(members)
+
+        doit()
+        return d
+
+    def list_members(self):
+        d = defer.Deferred()
+        ids = []
+
+        def doit():
+            dbg("requesting friend IDs")
+            self.get_member_list().addCallbacks(got_list, d.errback)
+
+        def got_list(members):
+            dbg("Finished getting friend IDs")
+            self.proto.dbg("you are following %d people" % (len(members)))
+            #users = [self.proto.get_twitter_user(id) for id in ids]
+            #self.proto.twitter_users.fetch_friend_info(users)
+            d.callback([self.proto.the_user]+list(members))
+
+        doit()
+        return d
+
+    def printEntry(self, entry):
+        text = entry.text
+        dbg("entry id: %r" % (entry.id))
+        # security:
+
+        dbg('entry text: %r' % (text))
+        text = full_entity_decode(text)
+        # security: remove invalid chars from text:
+        text = text.replace('\n', '').replace('\r', '')
+        dbg('entities decoded: %r' % (text))
+        self.sendMessage(u, text.encode('utf-8'))
+
+    def got_entry(self, e):
+        import pdb; pdb.set_trace()
+        dbg("%s got_entry: %r" % (e))
+        #self.printEntry(e)
+
 class PasserdProtocol(IRC):
     def connectionMade(self):
         self.quit_sent = False
@@ -918,7 +990,7 @@ class PasserdProtocol(IRC):
     def credentials_ok(self):
         self.user_data = self.data.get_user(self.the_user.nick, create=True)
 
-        self.twitter_chan = TwitterChannel(self, '#twitter')
+        self.twitter_chan = MainChannel(self, '#twitter')
         self.channels = {'#twitter':self.twitter_chan}
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
@@ -952,8 +1024,16 @@ class PasserdProtocol(IRC):
             if nick == u.nick:
                 return u
 
+    def join_channel(self, name):
+        channel = TwitterListChannel(self, name)
+        self.channels[name] = channel
+        return channel
+
     def get_channel(self, name):
-        return self.channels.get(name)
+        try:
+            return self.channels.get(name)
+        except KeyError:
+            return self.join_channel(name)
 
     def get_target(self, name):
         if name.startswith('#'):
