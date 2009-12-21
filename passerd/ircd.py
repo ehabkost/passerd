@@ -790,10 +790,10 @@ class ListChannel(TwitterChannel):
     #TODO move it elsewhere
     def __asIrcUser(self, member):
         u = IrcUser(self.proto)
-        u.nick = member.screen_name
-        u.username = member.screen_name
-        u.hostname = self.proto.hostname
-        u.real_name = member.name
+        u.nick = member.screen_name.encode(ENCODING)
+        u.username = member.screen_name.encode(ENCODING)
+        u.hostname = self.proto.hostname.encode(ENCODING)
+        u.real_name = member.name.encode(ENCODING)
         return u
 
     def list_members(self):
