@@ -760,6 +760,7 @@ class ListChannel(TwitterChannel):
     def __init__(self, proto, list_user, list_name):
         self.list_user = list_user
         self.list_name = list_name
+        self._ids2users = {}
         TwitterChannel.__init__(self, proto, self.__channelName())
 
     def timelineFeed(self, proto):
@@ -807,7 +808,8 @@ class ListChannel(TwitterChannel):
         def got_list(members):
             dbg("Finished getting members list")
             self.proto.dbg("you are following %d people" % (len(members)))
-            users = [self.__asIrcUser(m) for m in members]
+            self._ids2users.update(dict((m.id, self.__asIrcUser(m)) for m in members))
+            users = self._ids2users.values()
             #self.proto.twitter_users.fetch_friend_info(users)
             d.callback([self.proto.the_user]+users)
 
@@ -817,19 +819,18 @@ class ListChannel(TwitterChannel):
     def printEntry(self, entry):
         text = entry.text
         dbg("entry id: %r" % (entry.id))
+        user = self._ids2users[entry.user.id] #FIXME handle uid
         # security:
-
         dbg('entry text: %r' % (text))
         text = full_entity_decode(text)
         # security: remove invalid chars from text:
         text = text.replace('\n', '').replace('\r', '')
         dbg('entities decoded: %r' % (text))
-        self.sendMessage(u, text.encode('utf-8'))
+        self.sendMessage(user, text.encode('utf-8'))
 
     def got_entry(self, e):
-        import pdb; pdb.set_trace()
-        dbg("%s got_entry: %r" % (e))
-        #self.printEntry(e)
+        dbg("@%s/%s got_entry: %r" % (self.list_user, self.list_name, e))
+        self.printEntry(e)
 
 class PasserdProtocol(IRC):
     def connectionMade(self):
