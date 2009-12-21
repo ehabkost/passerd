@@ -68,6 +68,7 @@ LENGTH_LIMIT = 140
 
 dbg = logging.debug
 pinfo = logging.info
+perror = logging.error
 
 
 def hooks(fn):
@@ -555,11 +556,11 @@ class TwitterIrcUserCache:
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.feed = self.__timelineFeed(proto)
+        self.feed = self.timelineFeed(proto)
         self.feed.addCallback(self.got_entry)
         self.feed.addErrback(self.refresh_error)
 
-    def __timelineFeed(self, proto):
+    def timelineFeed(self, proto):
         raise NotImplementedError
 
     def topic(self):
@@ -751,19 +752,21 @@ class TwitterChannel(IrcChannel):
 class MainChannel(TwitterChannel):
     """The #twitter channel"""
 
-    def __timelineFeed(self, proto):
+    def timelineFeed(self, proto):
         return HomeTimelineFeed(proto)
 
 class ListChannel(TwitterChannel):
 
     def __init__(self, proto, list_user, list_name):
-        refname = "@%s/%s" % (list_user, list_name)
-        TwitterChannel(proto, refname)
         self.list_user = list_user
         self.list_name = list_name
+        TwitterChannel.__init__(self, proto, self.__channelName())
 
-    def __timelineFeed(self, proto):
+    def timelineFeed(self, proto):
         return ListTimelineFeed(proto)
+
+    def __channelName(self):
+        return "#@%s/%s" % (self.list_user, self.list_name)
 
     def get_member_list(self):
         d = defer.Deferred()
@@ -783,6 +786,12 @@ class ListChannel(TwitterChannel):
         doit()
         return d
 
+    #TODO move it elsewhere
+    def __asIrcUser(self, member):
+        u = IrcUser(self.proto)
+        u.nick = member.screen_name
+        raise NotImplementedError
+
     def list_members(self):
         d = defer.Deferred()
         ids = []
@@ -794,7 +803,8 @@ class ListChannel(TwitterChannel):
         def got_list(members):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(members)))
-            #users = [self.proto.get_twitter_user(id) for id in ids]
+            import pdb; pdb.set_trace()
+            users = [self.__asIrcUser(m) for m in members]
             #self.proto.twitter_users.fetch_friend_info(users)
             d.callback([self.proto.the_user]+list(members))
 
@@ -918,6 +928,7 @@ class PasserdProtocol(IRC):
         dbg("JOIN! %r %r" % (prefix, params))
         cname = params[0]
         channel = self.get_channel(cname)
+        dbg("get_channel %r" % (channel))
         if channel is not None:
             channel.userJoined(self.the_user)
 
@@ -1025,13 +1036,23 @@ class PasserdProtocol(IRC):
                 return u
 
     def join_channel(self, name):
-        channel = TwitterListChannel(self, name)
+        #TODO make it generic to allow more types of channels
+        dbg("about to join channel: %s" % (name))
+        try:
+            rawuser, list_name = name.split('/')
+        except ValueError:
+            return None
+        user = rawuser[2:]
+        if not user or not list_name:
+            perror('invalid list spec: %r' % (name))
+            return None
+        channel = ListChannel(self, user, list_name)
         self.channels[name] = channel
         return channel
 
     def get_channel(self, name):
         try:
-            return self.channels.get(name)
+            return self.channels[name]
         except KeyError:
             return self.join_channel(name)
 
