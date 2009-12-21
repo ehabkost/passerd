@@ -764,7 +764,7 @@ class ListChannel(TwitterChannel):
         TwitterChannel.__init__(self, proto, self.__channelName())
 
     def timelineFeed(self, proto):
-        return ListTimelineFeed(proto)
+        return ListTimelineFeed(proto, self.list_user, self.list_name)
 
     def __channelName(self):
         return "#@%s/%s" % (self.list_user, self.list_name)

@@ -145,6 +145,11 @@ class HomeTimelineFeed:
 
 class ListTimelineFeed(HomeTimelineFeed):
 
+    def __init__(self, proto, list_user, list_name):
+        HomeTimelineFeed.__init__(self, proto)
+        self.list_user = list_user
+        self.list_name = list_name
+
     def _refresh(self, last_status=None):
         if last_status is None:
             last_status = self.last_status_id
@@ -159,7 +164,8 @@ class ListTimelineFeed(HomeTimelineFeed):
             args['count'] = str(QUERY_COUNT)
             dbg("will try to use the API:")
 
-            self.api.home_timeline(got_entry, args).addCallbacks(finished, error)
+            self.api.list_timeline(got_entry, self.list_user,
+                    self.list_name, args).addCallbacks(finished, error)
             dbg("_refresh returning")
 
         def error(*args):
