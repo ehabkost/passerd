@@ -780,21 +780,15 @@ class ListChannel(TwitterChannel):
             doit(next)
 
         def doit(cursor="-1"):
-            #self.proto.dbg("requesting list of members for @%s/%s" %
-            #        (self.list_user, self.list_name))
+            self.proto.dbg("requesting list of members for @%s/%s" %
+                    (self.list_user, self.list_name))
             params = {"cursor": cursor}
-            self.proto.api.list_members(got_member, self.list_user,
+            self.proto.api.list_members(members.add, self.list_user,
                     self.list_name, params=params,
-                    page_delegate=got_page).addCallbacks(finished, error)
+                    page_delegate=got_page).addCallbacks(lambda *args: None, error)
 
         def error(*args):
             self.proto.dbg("error: %r" % (args))
-
-        def got_member(member):
-            members.add(member)
-
-        def finished(*args):
-            pass
 
         doit()
         return d
