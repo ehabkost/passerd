@@ -149,7 +149,7 @@ class IrcTarget:
                 else:
                     if value == 0:
                         # no "+" or "-" => simple query
-                        self.modeFlagQuery(self, f, params)
+                        self.modeFlagQuery(f, params)
                     else:
                         self.flagChangeRequest(f, value, params)
 
