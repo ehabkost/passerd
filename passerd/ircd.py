@@ -773,17 +773,28 @@ class ListChannel(TwitterChannel):
         d = defer.Deferred()
         members = set()
 
-        def doit():
-            self.proto.dbg('requesting list of members for @%s/%s' %
-                    (self.list_user, self.list_name))
+        def got_page(next, prev):
+            if not next or next == "0":
+                d.callback(members)
+                return
+            doit(next)
+
+        def doit(cursor="-1"):
+            #self.proto.dbg("requesting list of members for @%s/%s" %
+            #        (self.list_user, self.list_name))
+            params = {"cursor": cursor}
             self.proto.api.list_members(got_member, self.list_user,
-                    self.list_name).addCallbacks(finished, d.errback)
+                    self.list_name, params=params,
+                    page_delegate=got_page).addCallbacks(finished, error)
+
+        def error(*args):
+            self.proto.dbg("error: %r" % (args))
 
         def got_member(member):
             members.add(member)
 
         def finished(*args):
-            d.callback(members)
+            pass
 
         doit()
         return d
@@ -819,7 +830,10 @@ class ListChannel(TwitterChannel):
     def printEntry(self, entry):
         text = entry.text
         dbg("entry id: %r" % (entry.id))
-        user = self._ids2users[entry.user.id] #FIXME handle uid
+        try:
+            user = self._ids2users[entry.user.id]
+        except KeyError:
+            user = self.proto.twitter_users.user_from_id(entry.user.id)
         # security:
         dbg('entry text: %r' % (text))
         text = full_entity_decode(text)
