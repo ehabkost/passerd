@@ -130,7 +130,7 @@ class IrcTarget:
             self.proto.send_reply(irc.ERR_UNKNOWNMODE, 'Mode %s is not known to me' % (flag))
             return
         fn = getattr(self, 'mode_query_%s' % (flag))
-        fn(args)
+        fn(params)
 
     def flagChangeRequest(self, flag, value, params):
         dbg("mode change request: %r %s %r" % (flag, value, params))
@@ -149,7 +149,7 @@ class IrcTarget:
                 else:
                     if value == 0:
                         # no "+" or "-" => simple query
-                        self.modeFlagQuery(self, f, params)
+                        self.modeFlagQuery(f, params)
                     else:
                         self.flagChangeRequest(f, value, params)
 
