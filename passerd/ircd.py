@@ -815,22 +815,6 @@ class ListChannel(TwitterChannel):
         doit()
         return d
 
-    def printEntry(self, entry):
-        text = entry.text
-        dbg("entry id: %r" % (entry.id))
-        user = self.proto.get_twitter_user(entry.user.id)
-        # security:
-        dbg('entry text: %r' % (text))
-        text = full_entity_decode(text)
-        # security: remove invalid chars from text:
-        text = text.replace('\n', '').replace('\r', '')
-        dbg('entities decoded: %r' % (text))
-        self.sendMessage(user, text.encode('utf-8'))
-
-    def got_entry(self, e):
-        dbg("@%s/%s got_entry: %r" % (self.list_user, self.list_name, e))
-        self.printEntry(e)
-
 class PasserdProtocol(IRC):
     def connectionMade(self):
         self.quit_sent = False
