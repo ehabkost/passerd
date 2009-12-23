@@ -760,7 +760,6 @@ class ListChannel(TwitterChannel):
     def __init__(self, proto, list_user, list_name):
         self.list_user = list_user
         self.list_name = list_name
-        self._ids2users = {}
         TwitterChannel.__init__(self, proto, self._channelName())
 
     def _timelineFeed(self, proto):
@@ -793,30 +792,22 @@ class ListChannel(TwitterChannel):
         doit()
         return d
 
-    #TODO move it elsewhere
-    def __asIrcUser(self, member):
-        u = IrcUser(self.proto)
-        u.nick = member.screen_name.encode(ENCODING)
-        u.username = member.screen_name.encode(ENCODING)
-        u.hostname = self.proto.hostname.encode(ENCODING)
-        u.real_name = member.name.encode(ENCODING)
-        return u
-
     def list_members(self):
         d = defer.Deferred()
         ids = []
 
         def doit():
             dbg("requesting members for list")
-            self.get_member_list().addCallbacks(got_list, d.errback)
+            self.get_member_list().addCallbacks(got_members, d.errback)
 
-        def got_list(members):
+        def got_members(members):
             dbg("Finished getting members list")
             self.proto.dbg("you are following %d people" % (len(members)))
-            self._ids2users.update(dict((m.id, self.__asIrcUser(m)) for m in members))
-            users = self._ids2users.values()
-            #self.proto.twitter_users.fetch_friend_info(users)
-            d.callback([self.proto.the_user]+users)
+            users = [self.proto.the_user]
+            for tu in members:
+                self.proto.global_twuser_cache.got_api_user_info(tu)
+                users.append(self.proto.twitter_users.user_from_id(tu.id))
+            d.callback(users)
 
         doit()
         return d
@@ -824,10 +815,7 @@ class ListChannel(TwitterChannel):
     def printEntry(self, entry):
         text = entry.text
         dbg("entry id: %r" % (entry.id))
-        try:
-            user = self._ids2users[entry.user.id]
-        except KeyError:
-            user = self.proto.twitter_users.user_from_id(entry.user.id)
+        user = self.proto.get_twitter_user(entry.user.id)
         # security:
         dbg('entry text: %r' % (text))
         text = full_entity_decode(text)
