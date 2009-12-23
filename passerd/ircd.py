@@ -1038,16 +1038,19 @@ class PasserdProtocol(IRC):
     def join_channel(self, name):
         #TODO make it generic to allow more types of channels
         dbg("about to join channel: %s" % (name))
-        try:
-            rawuser, list_name = name.split('/')
-        except ValueError:
-            return None
-        user = rawuser[2:]
-        if not user or not list_name:
-            perror('invalid list spec: %r' % (name))
-            return None
-        channel = ListChannel(self, user, list_name)
-        self.channels[name] = channel
+        channel = None
+        if name.startswith("#@"):
+            try:
+                rawuser, list_name = name.split('/')
+            except ValueError:
+                pass
+            else:
+                user = rawuser[2:]
+                if not user or not list_name:
+                    perror('invalid list spec: %r' % (name))
+                    return None
+                channel = ListChannel(self, user, list_name)
+                self.channels[name] = channel
         return channel
 
     def get_channel(self, name):
