@@ -563,9 +563,6 @@ class TwitterChannel(IrcChannel):
     def _timelineFeed(self, proto):
         raise NotImplementedError
 
-    def topic(self):
-        return "Passerd -- Twitter home timeline channel"
-
     def get_friend_list(self):
         d = defer.Deferred()
         ids = set()
@@ -752,6 +749,9 @@ class TwitterChannel(IrcChannel):
 class MainChannel(TwitterChannel):
     """The #twitter channel"""
 
+    def topic(self):
+        return "Passerd -- Twitter home timeline channel"
+
     def _timelineFeed(self, proto):
         return HomeTimelineFeed(proto)
 
@@ -767,6 +767,9 @@ class ListChannel(TwitterChannel):
 
     def _channelName(self):
         return "#@%s/%s" % (self.list_user, self.list_name)
+
+    def topic(self):
+        return "Passerd -- @%s/%s" % (self.list_user, self.list_name)
 
     def get_member_list(self):
         d = defer.Deferred()
