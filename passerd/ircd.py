@@ -928,6 +928,8 @@ class PasserdProtocol(IRC):
         dbg("JOIN! %r %r" % (prefix, params))
         cname = params[0]
         channel = self.get_channel(cname)
+        if channel is None:
+            channel = self.join_channel(cname)
         dbg("get_channel %r" % (channel))
         if channel is not None:
             channel.userJoined(self.the_user)
@@ -1054,10 +1056,7 @@ class PasserdProtocol(IRC):
         return channel
 
     def get_channel(self, name):
-        try:
-            return self.channels[name]
-        except KeyError:
-            return self.join_channel(name)
+        return self.channels.get(name)
 
     def get_target(self, name):
         if name.startswith('#'):
