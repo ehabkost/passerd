@@ -38,6 +38,9 @@ QUERY_COUNT = 100
 dbg = logging.debug
 
 class HomeTimelineFeed:
+
+    LAST_STATUS_VAR = 'home_last_status_id'
+
     def __init__(self, proto):
         self.proto = proto
         self.callbacks = CallbackList()
@@ -45,7 +48,20 @@ class HomeTimelineFeed:
         self.continue_refreshing = False
         self.next_refresh = None
         self.loading = False
-        self.last_status_id = self.proto.user_var('home_last_status_id')
+        self._last_status_id = None
+
+    def _last_status_var(self):
+        return self.LAST_STATUS_VAR
+
+    def _set_last_status_id(self, status_id):
+        self.proto.set_user_var(self._last_status_var(), status_id)
+
+    def _get_last_status_id(self):
+        if self._last_status_id is None:
+            self._last_status_id = self.proto.user_var(self._last_status_var())
+        return self._last_status_id
+
+    last_status_id = property(_get_last_status_id, _set_last_status_id)
 
     def addCallback(self, *args, **kwargs):
         """Add a callback for new entries"""
@@ -69,6 +85,10 @@ class HomeTimelineFeed:
         self.cancel_next_refresh()
         self.next_refresh = reactor.callLater(REFRESH_DELAY, self.refresh)
 
+    def _timeline(self, delegate, args):
+        dbg("will try to use the API:")
+        return self.api.home_timeline(delegate, args)
+
     def _refresh(self, last_status=None):
         if last_status is None:
             last_status = self.last_status_id
@@ -81,9 +101,7 @@ class HomeTimelineFeed:
             if last_status:
                 args['since_id'] = last_status
             args['count'] = str(QUERY_COUNT)
-            dbg("will try to use the API:")
-
-            self.api.home_timeline(got_entry, args).addCallbacks(finished, error)
+            self._timeline(got_entry, args).addCallbacks(finished, error)
             dbg("_refresh returning")
 
         def error(*args):
@@ -102,7 +120,6 @@ class HomeTimelineFeed:
                 self.callbacks.callback(e)
                 if e.id > self.last_status_id:
                     self.last_status_id = e.id
-                    self.proto.set_user_var('home_last_status_id', self.last_status_id)
             d.callback(len(entries))
 
         doit()
@@ -150,42 +167,6 @@ class ListTimelineFeed(HomeTimelineFeed):
         self.list_user = list_user
         self.list_name = list_name
 
-    def _refresh(self, last_status=None):
-        if last_status is None:
-            last_status = self.last_status_id
-
-        entries = []
-        d = defer.Deferred()
-
-        def doit():
-            args = {}
-            if last_status:
-                args['since_id'] = last_status
-            args['count'] = str(QUERY_COUNT)
-            dbg("will try to use the API:")
-
-            self.api.list_timeline(got_entry, self.list_user,
-                    self.list_name, args).addCallbacks(finished, error)
-            dbg("_refresh returning")
-
-        def error(*args):
-            dbg("_refresh error %r" % (args,))
-            self.errbacks.callback(*args)
-            d.errback(*args)
-
-        # store the entries and then show them in chronological order:
-        def got_entry(e):
-            dbg("got an entry: %r" % (repr(e)))
-            entries.insert(0, e)
-
-        def finished(*args):
-            dbg("finished loading %r" % (args,))
-            for e in entries:
-                self.callbacks.callback(e)
-                if e.id > self.last_status_id:
-                    self.last_status_id = e.id
-                    self.proto.set_user_var('home_last_status_id', self.last_status_id)
-            d.callback(len(entries))
-
-        doit()
-        return d
+    def _timeline(self, delegate, args):
+        return self.api.list_timeline(delegate, self.list_user,
+                self.list_name, args)
