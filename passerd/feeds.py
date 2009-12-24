@@ -37,9 +37,7 @@ QUERY_COUNT = 100
 
 dbg = logging.debug
 
-class HomeTimelineFeed:
-
-    LAST_STATUS_VAR = 'home_last_status_id'
+class TwitterFeed:
 
     def __init__(self, proto):
         self.proto = proto
@@ -84,10 +82,6 @@ class HomeTimelineFeed:
     def refresh_resched(self):
         self.cancel_next_refresh()
         self.next_refresh = reactor.callLater(REFRESH_DELAY, self.refresh)
-
-    def _timeline(self, delegate, args):
-        dbg("will try to use the API:")
-        return self.api.home_timeline(delegate, args)
 
     def _refresh(self, last_status=None):
         if last_status is None:
@@ -160,10 +154,10 @@ class HomeTimelineFeed:
         self.continue_refreshing = True
         self.refresh()
 
-class ListTimelineFeed(HomeTimelineFeed):
+class ListTimelineFeed(TwitterFeed):
 
     def __init__(self, proto, list_user, list_name):
-        HomeTimelineFeed.__init__(self, proto)
+        TwitterFeed.__init__(self, proto)
         self.list_user = list_user
         self.list_name = list_name
 
@@ -173,3 +167,13 @@ class ListTimelineFeed(HomeTimelineFeed):
     def _timeline(self, delegate, args):
         return self.api.list_timeline(delegate, self.list_user,
                 self.list_name, args)
+
+
+class HomeTimelineFeed(TwitterFeed):
+    LAST_STATUS_VAR = 'home_last_status_id'
+
+    def _timeline(self, delegate, args):
+        dbg("will try to use the API:")
+        return self.api.home_timeline(delegate, args)
+
+ 
