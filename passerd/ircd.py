@@ -874,20 +874,28 @@ class PasserdProtocol(IRC):
 
         self.users = [self.the_user]
 
-        self.twitter_chan = MainChannel(self, '#twitter')
-        self.mentions_chan = MentionsChannel(self, '#mentions')
-        self.channels = {'#twitter':self.twitter_chan, '#mentions':self.mentions_chan}
+        tc = MainChannel(self, '#twitter')
+        mc = MentionsChannel(self, '#mentions')
+
+        #TODO: keep a list of the fixed and joined channels,
+        #      but use short-lived channel objects for other channel-query
+        #      commands
+        self.channels = {'#twitter':tc, '#mentions':mc}
+
+        #FIXME: make the auto-join optional:
+        self.autojoin_channels = [tc, mc]
+        #FIXME: make joined_channels a more efficiente list of channels
+        self.joined_channels = []
 
         dbg("Got new client")
 
     def welcomeUser(self):
-        #FIXME: make the auto-join optional:
-        self.twitter_chan.userJoined(self.the_user)
-        self.mentions_chan.userJoined(self.the_user)
+        for ch in self.autojoin_channels:
+            self.join_channel(ch)
 
     def _userQuit(self, reason):
-        #FIXME: keep track of the channels where the user is on
-        self.twitter_chan.userQuit(self.the_user, reason)
+        for ch in self.joined_channels:
+            self.leave_channel(ch, reason)
         self.quit_sent = True
 
     def userQuit(self, reason):
@@ -953,15 +961,43 @@ class PasserdProtocol(IRC):
     def irc_PING(self, prefix, args):
         self.server_message('PONG', args[0])
 
-    def irc_JOIN(self, prefix, params):
-        dbg("JOIN! %r %r" % (prefix, params))
-        cname = params[0]
+
+    def join_channel(self, chan):
+        if not (chan in self.joined_channels):
+            self.joined_channels.append(chan)
+            chan.userJoined(self.the_user)
+
+    def leave_channel(self, chan, reason):
+        if chan in self.joined_channels:
+            chan.userLeft(self.the_user, reason)
+            self.joined_channels.remove(chan)
+
+    def leave_cname(self, cname, reason):
+        channel = self.get_channel(cname)
+        if channel is not None:
+            self.leave_channel(channel, reason)
+
+    def join_cname(self, cname):
         channel = self.get_channel(cname)
         if channel is None:
-            channel = self.join_channel(cname)
+            channel = self.create_channel(cname)
         dbg("get_channel %r" % (channel))
         if channel is not None:
-            channel.userJoined(self.the_user)
+            self.join_channel(channel)
+
+    def irc_JOIN(self, prefix, params):
+        dbg("JOIN! %r %r" % (prefix, params))
+        cnames = params[0]
+        for c in cnames.split(','):
+            self.join_cname(c)
+
+    def irc_PART(self, prefix, params):
+        chans = params[0]
+        reason = None
+        if len(params) > 1:
+            reason = params[1]
+        for c in chans.split(','):
+            self.leave_cname(c, reason)
 
     def irc_INVITE(self, prefix, params):
         nick = params[0]
@@ -977,19 +1013,6 @@ class PasserdProtocol(IRC):
             chan = self.get_channel(cname)
             if chan is not None:
                 chan.kickUsers(self.the_user, users)
-
-    def leave_channel(self, cname, reason):
-        channel = self.get_channel(cname)
-        if channel is not None:
-            channel.userLeft(self.the_user, reason)
-
-    def irc_PART(self, prefix, params):
-        chans = params[0]
-        reason = None
-        if len(params) > 1:
-            reason = params[1]
-        for c in chans.split(','):
-            self.leave_channel(c, reason)
 
     def irc_QUIT(self, pref, params):
         reason = None
@@ -1065,8 +1088,10 @@ class PasserdProtocol(IRC):
             if nick == u.nick:
                 return u
 
-    def join_channel(self, name):
+    def create_channel(self, name):
         #TODO make it generic to allow more types of channels
+        #TODO: make it possible to create a short-lived channel object for
+        #      channel-query commands
         dbg("about to join channel: %s" % (name))
         channel = None
         if name.startswith("#@"):
