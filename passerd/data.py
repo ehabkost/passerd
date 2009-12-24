@@ -84,6 +84,7 @@ class DataStore:
         self.session.commit()
         return u
 
+    #FIXME: use user ID, not screen_name
     def get_user(self, login, create=False):
         try:
             return self.session.query(User).filter_by(twitter_login=login).one()

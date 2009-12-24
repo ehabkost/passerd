@@ -99,6 +99,13 @@ def try_unicode(s):
     # no success:
     raise Exception("couldn't decode message as unicode")
 
+def to_str(s):
+    if isinstance(s, unicode):
+        return s.encode(ENCODING)
+    elif isinstance(s, str):
+        return s
+    else:
+        raise Exception("%r is not str (type: %r)" % (s, type(s)))
 
 class IrcTarget:
     """Common class for IRC channels and users
@@ -224,6 +231,7 @@ class IrcChannel(IrcTarget):
         return []
 
     def list_members(self):
+        #FIXME: include the_user only if the user already joined
         return [self.proto.the_user]
 
     def mode_query_b(self, params):
@@ -296,6 +304,7 @@ class IrcChannel(IrcTarget):
 
         def error(*args):
             dbg("ERROR: failure getting member names")
+            #FIXME: include the_user only if the user already joined
             self._sendNames([self.proto.the_user])
 
         doit()
@@ -599,7 +608,7 @@ class TwitterChannel(IrcChannel):
 
     def refresh_error(self, e):
         dbg("#twitter refresh error")
-        self.proto.send_notice(self.proto.the_user, self, "error refreshing feed: %s" % (e.value))
+        self.proto.chan_notice(self, "error refreshing feed: %s" % (e.value))
 
     def afterUserJoined(self, user):
         dbg("user %s has joined!" % (user.full_id()))
@@ -622,7 +631,7 @@ class TwitterChannel(IrcChannel):
         def done(num_args):
             if num_args == 0:
                 #FIXME: we are sending notice as if it was from the user, here
-                self.proto.send_notice(self.proto.the_user, self, 'people are quiet...')
+                self.proto.chan_notice(self, 'people are quiet...')
 
         doit()
 
@@ -686,6 +695,7 @@ class MainChannel(TwitterChannel):
 
         def doit():
             self.proto.dbg("requesting list of friends...")
+            #FIXME: user proto.user_data instead of the_user.nick
             self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
 
         def got_id(id):
@@ -710,6 +720,7 @@ class MainChannel(TwitterChannel):
             self.proto.dbg("you are following %d people" % (len(ids)))
             users = [self.proto.get_twitter_user(id) for id in ids]
             self.proto.twitter_users.fetch_friend_info(users)
+            #FIXME: include the_user only if the user already joined
             d.callback([self.proto.the_user]+users)
 
         doit()
@@ -826,6 +837,7 @@ class ListChannel(TwitterChannel):
         def got_members(members):
             dbg("Finished getting members list")
             self.proto.dbg("you are following %d people" % (len(members)))
+            #FIXME: include the_user only if the user already joined
             users = [self.proto.the_user]
             for tu in members:
                 self.proto.global_twuser_cache.got_api_user_info(tu)
@@ -926,10 +938,14 @@ class PasserdProtocol(IRC):
         self.send_notice(self.my_irc_server, target, msg)
 
     def send_notice(self, sender, target, msg):
-        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (msg))
+        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg)))
+
+    def chan_notice(self, target, msg):
+        #FIXME: use a 'bot' user for those kinds of notices
+        self.send_notice(self.the_user, target, msg)
 
     def send_privmsg(self, sender, target, msg):
-        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (msg))
+        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg)))
 
     def notice(self, msg):
         self.server_notice(self.the_user, msg)
@@ -995,8 +1011,8 @@ class PasserdProtocol(IRC):
             self.api.verify_credentials(got_user).addCallbacks(done, error).addErrback(error)
 
         def got_user(u):
-            self.notice("Credentials OK!")
-            self.credentials_ok()
+            self.notice("Credentials OK! Your Twitter user ID: %s. screen_name: %s" % (u.id, u.screen_name))
+            self.credentials_ok(u)
             ok.append(1)
 
         def done(*args):
@@ -1013,8 +1029,8 @@ class PasserdProtocol(IRC):
         doit()
 
 
-    def credentials_ok(self):
-        self.user_data = self.data.get_user(self.the_user.nick, create=True)
+    def credentials_ok(self, u):
+        self.user_data = self.data.get_user(u.screen_name, create=True)
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
         self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
@@ -1029,9 +1045,11 @@ class PasserdProtocol(IRC):
         self.the_user.username = username
         self.the_user.real_name = real_name
 
+        twitter_username = self.the_user.nick
+
         #FIXME: refuse any other command before _USER, to avoid references to
         # undefined attributes
-        self.api = Twitter(self.the_user.nick, self.password, base_url=BASE_URL)
+        self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
         #FIXME; patch twitty-twister to accept agent=foobar
         self.api.agent = MYAGENT
 
