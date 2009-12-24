@@ -439,7 +439,12 @@ class UnavailableTwitterData:
     twitter_name = property(lambda self: 'Twitter User (info not fetched yet)')
 
 
-class TwitterIrcUser(IrcUser):
+class CachedTwitterIrcUser(IrcUser):
+    """An IrcUser object for cached Twitter user info
+
+    Objects of this class may be short-lived, just to return info of a random
+    Twitter user for which we don't have much data.
+    """
     def __init__(self, proto, cache, id):
         IrcUser.__init__(self, proto)
         self._twitter_id = id
@@ -447,7 +452,7 @@ class TwitterIrcUser(IrcUser):
         self._data = None
 
     def data_changed(self, old_info, new_info):
-        dbg("TwitterIrcUser.data_changed! %r %r" % (old_info, new_info))
+        dbg("CachedTwitterIrcUser.data_changed! %r %r" % (old_info, new_info))
         if (old_info is None) or (old_info.screen_name != new_info.screen_name):
             self.notifyNickChange(str(new_info.screen_name))
 
@@ -475,10 +480,10 @@ class TwitterIrcUser(IrcUser):
 
 
 class TwitterIrcUserCache:
-    """Cache of TwitterIrcUser objects
+    """Cache of CachedTwitterIrcUser objects
 
     A TwitterIrcUserCache is client-specific (not server-global), and takes
-    care of the TwitterIrcUser objects that point to Twitter user data.
+    care of creating CachedTwitterIrcUser objects for some queries.
     """
     def __init__(self, proto, cache):
         self.proto = proto
@@ -490,6 +495,7 @@ class TwitterIrcUserCache:
         return self.id2user.get(int(id))
 
     def _user_changed(self, id, old_info, new_info):
+        #TODO: kill id2user and just keep the list of watched user IDs somewhere
         dbg("user_changed: %r, %r, %r" % (id, old_info, new_info))
         u = self._get_user(id)
         if u is not None:
@@ -497,7 +503,7 @@ class TwitterIrcUserCache:
             u.data_changed(old_info, new_info)
 
     def _new_user(self, id):
-        u = TwitterIrcUser(self.proto, self.cache, id)
+        u = CachedTwitterIrcUser(self.proto, self.cache, id)
         self.id2user[int(id)] = u
         return u
 
