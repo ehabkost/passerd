@@ -374,7 +374,6 @@ class TwitterUserCache:
     def __init__(self, proto):
         self.proto = proto
         self.callbacks = CallbackList()
-        self.id2user = {}
 
     def addCallback(self, cb, *args, **kwargs):
         """Add a new callback function
@@ -489,32 +488,32 @@ class TwitterIrcUserCache:
         self.proto = proto
         self.cache = cache
         self.cache.addCallback(self._user_changed)
-        self.id2user = {}
-
-    def _get_user(self, id):
-        return self.id2user.get(int(id))
+        self._watched_ids = {}
 
     def _user_changed(self, id, old_info, new_info):
-        #TODO: kill id2user and just keep the list of watched user IDs somewhere
         dbg("user_changed: %r, %r, %r" % (id, old_info, new_info))
-        u = self._get_user(id)
-        if u is not None:
-            dbg("user_changed: got user.")
-            u.data_changed(old_info, new_info)
+        if id in self._watched_ids:
+            dbg("user_changed (%s): is being watched." % (id))
+            u = self._get_user(id).data_changed(old_info, new_info)
 
-    def _new_user(self, id):
+    def _get_user(self, id):
         u = CachedTwitterIrcUser(self.proto, self.cache, id)
-        self.id2user[int(id)] = u
         return u
 
-    def user_from_id(self, id):
-        u = self._get_user(id)
-        if u is not None:
-            # already on current list
-            return u
+    def watch_user_id(self, id):
+        """Start watching user ID for changes"""
+        self._watched_ids[id] = True
 
-        # found on the DB, but not on our list:
-        return self._new_user(id)
+    def watch_user_ids(self, ids):
+        for id in ids:
+            self.watch_user_id(id)
+
+    def watch_user(self, u):
+        self.watch_user_id(u._twitter_id)
+
+    def user_from_id(self, id):
+        return self._get_user(id)
+
 
     def fetch_individual_user_info(self, unknown_users):
         #TODO: implement me
@@ -724,6 +723,7 @@ class MainChannel(TwitterChannel):
         def got_list(ids):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(ids)))
+            self.proto.twitter_users.watch_user_ids(ids)
             users = [self.proto.get_twitter_user(id) for id in ids]
             self.proto.twitter_users.fetch_friend_info(users)
             #FIXME: include the_user only if the user already joined
@@ -743,6 +743,7 @@ class MainChannel(TwitterChannel):
         def got_user_info(u):
             user_ids.append(u.id)
             self.proto.global_twuser_cache.got_api_user_info(u)
+            self.proto.twitter_users.watch_user_id(u.id)
             u = self.proto.twitter_users.user_from_id(u.id)
             self.notifyJoin(u)
 
@@ -847,6 +848,7 @@ class ListChannel(TwitterChannel):
             users = [self.proto.the_user]
             for tu in members:
                 self.proto.global_twuser_cache.got_api_user_info(tu)
+                self.proto.twitter_users.watch_user_id(tu.id)
                 users.append(self.proto.twitter_users.user_from_id(tu.id))
             d.callback(users)
 
