@@ -176,4 +176,9 @@ class HomeTimelineFeed(TwitterFeed):
         dbg("will try to use the API:")
         return self.api.home_timeline(delegate, args)
 
- 
+
+class MentionsFeed(TwitterFeed):
+    LAST_STATUS_VAR = 'mentions_last_status_id'
+
+    def _timeline(self, delegate, args):
+        return self.api.mentions(delegate, args)

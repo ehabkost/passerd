@@ -37,7 +37,7 @@ from twisted.python import log
 from twittytwister.twitter import Twitter
 
 from passerd.data import DataStore, TwitterUserData
-from passerd.feeds import HomeTimelineFeed, ListTimelineFeed
+from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, MentionsFeed
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 
@@ -755,6 +755,16 @@ class MainChannel(TwitterChannel):
     def _timelineFeed(self, proto):
         return HomeTimelineFeed(proto)
 
+
+class MentionsChannel(TwitterChannel):
+    """The #mentions channel"""
+    def topic(self):
+        return "Passerd -- mentions of @%s" % (self.proto.the_user.nick)
+
+    def _timelineFeed(self, proto):
+        return MentionsFeed(proto)
+
+
 class ListChannel(TwitterChannel):
 
     def __init__(self, proto, list_user, list_name):
@@ -846,6 +856,7 @@ class PasserdProtocol(IRC):
 
     def welcomeUser(self):
         self.twitter_chan.userJoined(self.the_user)
+        #self.mentions_chan.userJoined(self.the_user)
 
     def _userQuit(self, reason):
         #FIXME: keep track of the channels where the user is on
@@ -991,7 +1002,8 @@ class PasserdProtocol(IRC):
         self.user_data = self.data.get_user(self.the_user.nick, create=True)
 
         self.twitter_chan = MainChannel(self, '#twitter')
-        self.channels = {'#twitter':self.twitter_chan}
+        self.mentions_chan = MentionsChannel(self, '#mentions')
+        self.channels = {'#twitter':self.twitter_chan, '#mentions':self.mentions_chan}
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
         self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
