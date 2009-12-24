@@ -862,6 +862,10 @@ class PasserdProtocol(IRC):
 
         self.users = [self.the_user]
 
+        self.twitter_chan = MainChannel(self, '#twitter')
+        self.mentions_chan = MentionsChannel(self, '#mentions')
+        self.channels = {'#twitter':self.twitter_chan, '#mentions':self.mentions_chan}
+
         dbg("Got new client")
 
     def welcomeUser(self):
@@ -1011,10 +1015,6 @@ class PasserdProtocol(IRC):
 
     def credentials_ok(self):
         self.user_data = self.data.get_user(self.the_user.nick, create=True)
-
-        self.twitter_chan = MainChannel(self, '#twitter')
-        self.mentions_chan = MentionsChannel(self, '#mentions')
-        self.channels = {'#twitter':self.twitter_chan, '#mentions':self.mentions_chan}
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
         self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
