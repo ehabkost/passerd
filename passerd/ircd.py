@@ -1877,6 +1877,7 @@ class PasserdGlobalOptions:
                           ('passerd.oauth',logging.DEBUG),
                           ('passerd.feeds',logging.DEBUG),
                           ('passerd.scheduler',logging.DEBUG)]
+        self.logformat = '%(asctime)s:%(levelname)s:%(name)s:%(message)s'
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -1897,6 +1898,9 @@ def parse_cmdline(args, opts):
     parser.add_option("-D", "--debug",
             action="callback", callback=lambda *args: set_loglevels([(None,logging.DEBUG)]),
             help="Enable debug logging")
+    parser.add_option("--logformat",
+            metavar="FORMAT", type="string", default=None,
+            help="Set the logging format")
     _, args = parser.parse_args(args)
     if not args:
         parser.error("the database path is needed!")
@@ -1906,7 +1910,7 @@ def parse_cmdline(args, opts):
 def setup_logging(opts):
 
     ch = logging.StreamHandler(opts.logstream)
-    f = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s')
+    f = logging.Formatter(opts.logformat)
     ch.setFormatter(f)
 
     # root logger:
