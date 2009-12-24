@@ -112,7 +112,7 @@ class TwitterFeed:
             dbg("finished loading %r" % (args,))
             for e in entries:
                 self.callbacks.callback(e)
-                if e.id > self.last_status_id:
+                if int(e.id) > int(self.last_status_id):
                     self.update_last_status_id(e.id)
             d.callback(len(entries))
 
