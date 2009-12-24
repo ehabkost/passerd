@@ -863,6 +863,7 @@ class PasserdProtocol(IRC):
 
         self.global_twuser_cache = self.factory.global_twuser_cache
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
+        self.twitter_user_info = None
 
         self.my_irc_server = IrcServer(self.myhost)
 
@@ -1053,6 +1054,7 @@ class PasserdProtocol(IRC):
 
 
     def credentials_ok(self, u):
+        self.twitter_user_info = u
         self.user_data = self.data.get_user(u.screen_name, create=True)
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
