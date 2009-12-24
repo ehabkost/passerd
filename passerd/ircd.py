@@ -224,7 +224,7 @@ class IrcChannel(IrcTarget):
         return []
 
     def list_members(self):
-        return []
+        return [self.proto.the_user]
 
     def mode_query_b(self, params):
         """Query ban list"""
@@ -319,6 +319,12 @@ class IrcChannel(IrcTarget):
 
     def topic(self):
         return "[no topic set]"
+
+    def kickUser(self, sender, nickname):
+        return NotImplementedError("Can't kick users from %s" % (self.name))
+
+    def inviteUser(self, nickname):
+        return NotImplementedError("Can't invite users to %s" % (self.name))
 
     def kickUsers(self, sender, users):
         for u in users:
@@ -566,97 +572,10 @@ class TwitterChannel(IrcChannel):
     def _timelineFeed(self, proto):
         raise NotImplementedError
 
-    def get_friend_list(self):
-        d = defer.Deferred()
-        ids = set()
-
-        def doit():
-            self.proto.dbg("requesting list of friends...")
-            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
-
-        def got_id(id):
-            ids.add(int(id))
-
-        def finished(*args):
-            d.callback(ids)
-
-        doit()
-        return d
-
     def userModeChar(self, u):
         if u == self.proto.the_user:
             return '@'
         return ''
-
-    def list_members(self):
-        d = defer.Deferred()
-        ids = []
-
-        def doit():
-            dbg("requesting friend IDs")
-            self.get_friend_list().addCallbacks(got_list, d.errback)
-
-        def got_list(ids):
-            dbg("Finished getting friend IDs")
-            self.proto.dbg("you are following %d people" % (len(ids)))
-            users = [self.proto.get_twitter_user(id) for id in ids]
-            self.proto.twitter_users.fetch_friend_info(users)
-            d.callback([self.proto.the_user]+users)
-
-        doit()
-        return d
-
-    def inviteUser(self, nickname):
-        #TODO: send a better error message if user is already being followed
-
-        user_ids = []
-        def doit():
-            self.proto.api.follow_user(nickname, got_user_info).addCallbacks(done, error)
-            self.proto.send_reply(irc.RPL_INVITING, nickname, self.name)
-
-        def got_user_info(u):
-            user_ids.append(u.id)
-            self.proto.global_twuser_cache.got_api_user_info(u)
-            u = self.proto.twitter_users.user_from_id(u.id)
-            self.notifyJoin(u)
-
-        def done(*args):
-            if not user_ids:
-                self.proto.notice("follow: got reply but no user info!?")
-                return
-            self.proto.dbg("follow request for %s done" % (nickname))
-
-        def error(e):
-            self.proto.notice('error when trying to follow user: %s' % (e.value))
-            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
-
-        doit()
-
-    def kickUser(self, sender, nickname):
-        #TODO: send a better error message if the user is not being followed
-
-        user_ids = []
-        def doit():
-            self.proto.api.unfollow_user(nickname, got_user_info).addCallbacks(done, error)
-
-        def got_user_info(u):
-            user_ids.append(u.id)
-            self.proto.global_twuser_cache.got_api_user_info(u)
-            u = self.proto.twitter_users.user_from_id(u.id)
-            self.notifyKick(sender, u)
-
-        def done(*args):
-            if not user_ids:
-                self.proto.notice("unfollow: got reply but no user info!?")
-                return
-            self.proto.dbg("unfollow request for %s done" % (nickname))
-
-        def error(e):
-            self.proto.notice('error when trying to unfollow user: %s' % (e.value))
-            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
-
-        doit()
-
 
     def printEntry(self, entry):
         u = self.proto.get_twitter_user(entry.user.id)
@@ -727,6 +646,11 @@ class TwitterChannel(IrcChannel):
 
         self.sendTwitterUpdate(msg)
 
+    def ctcp_ACTION(self, arg):
+        dbg("ACTION: %r" % (arg))
+        #TODO: make the behavior of "/me" messages configurable
+        self.sendTwitterUpdate('/me %s' % (arg))
+
     def sendTwitterUpdate(self, msg):
         msg = try_unicode(msg)
         if len(msg) > LENGTH_LIMIT:
@@ -744,10 +668,8 @@ class TwitterChannel(IrcChannel):
 
         doit()
 
-    def ctcp_ACTION(self, arg):
-        dbg("ACTION: %r" % (arg))
-        #TODO: make the behavior of "/me" messages configurable
-        self.sendTwitterUpdate('/me %s' % (arg))
+
+#TODO: support multi-feed channel, so the mentions and home timeline appear on the same place
 
 class MainChannel(TwitterChannel):
     """The #twitter channel"""
@@ -758,11 +680,96 @@ class MainChannel(TwitterChannel):
     def _timelineFeed(self, proto):
         return HomeTimelineFeed(proto)
 
+    def get_friend_list(self):
+        d = defer.Deferred()
+        ids = set()
+
+        def doit():
+            self.proto.dbg("requesting list of friends...")
+            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
+
+        def got_id(id):
+            ids.add(int(id))
+
+        def finished(*args):
+            d.callback(ids)
+
+        doit()
+        return d
+
+    def list_members(self):
+        d = defer.Deferred()
+        ids = []
+
+        def doit():
+            dbg("requesting friend IDs")
+            self.get_friend_list().addCallbacks(got_list, d.errback)
+
+        def got_list(ids):
+            dbg("Finished getting friend IDs")
+            self.proto.dbg("you are following %d people" % (len(ids)))
+            users = [self.proto.get_twitter_user(id) for id in ids]
+            self.proto.twitter_users.fetch_friend_info(users)
+            d.callback([self.proto.the_user]+users)
+
+        doit()
+        return d
+
+    def inviteUser(self, nickname):
+        #TODO: send a better error message if user is already being followed
+
+        user_ids = []
+        def doit():
+            self.proto.api.follow_user(nickname, got_user_info).addCallbacks(done, error)
+            self.proto.send_reply(irc.RPL_INVITING, nickname, self.name)
+
+        def got_user_info(u):
+            user_ids.append(u.id)
+            self.proto.global_twuser_cache.got_api_user_info(u)
+            u = self.proto.twitter_users.user_from_id(u.id)
+            self.notifyJoin(u)
+
+        def done(*args):
+            if not user_ids:
+                self.proto.notice("follow: got reply but no user info!?")
+                return
+            self.proto.dbg("follow request for %s done" % (nickname))
+
+        def error(e):
+            self.proto.notice('error when trying to follow user: %s' % (e.value))
+            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
+
+        doit()
+
+    def kickUser(self, sender, nickname):
+        #TODO: send a better error message if the user is not being followed
+
+        user_ids = []
+        def doit():
+            self.proto.api.unfollow_user(nickname, got_user_info).addCallbacks(done, error)
+
+        def got_user_info(u):
+            user_ids.append(u.id)
+            self.proto.global_twuser_cache.got_api_user_info(u)
+            u = self.proto.twitter_users.user_from_id(u.id)
+            self.notifyKick(sender, u)
+
+        def done(*args):
+            if not user_ids:
+                self.proto.notice("unfollow: got reply but no user info!?")
+                return
+            self.proto.dbg("unfollow request for %s done" % (nickname))
+
+        def error(e):
+            self.proto.notice('error when trying to unfollow user: %s' % (e.value))
+            self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
+
+        doit()
 
 class MentionsChannel(TwitterChannel):
     """The #mentions channel"""
     def topic(self):
-        return "Passerd -- mentions of @%s" % (self.proto.the_user.nick)
+        return "Passerd -- @mentions"
 
     def _timelineFeed(self, proto):
         return MentionsFeed(proto)
@@ -858,8 +865,9 @@ class PasserdProtocol(IRC):
         dbg("Got new client")
 
     def welcomeUser(self):
+        #FIXME: make the auto-join optional:
         self.twitter_chan.userJoined(self.the_user)
-        #self.mentions_chan.userJoined(self.the_user)
+        self.mentions_chan.userJoined(self.the_user)
 
     def _userQuit(self, reason):
         #FIXME: keep track of the channels where the user is on
