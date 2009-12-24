@@ -49,6 +49,9 @@ VERSION = '0.0.3'
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
 
+BASE_URL = 'https://twitter.com'
+
+
 ENCODING = 'utf-8'
 FALLBACK_ENCODING = 'iso-8859-1'
 
@@ -1020,7 +1023,7 @@ class PasserdProtocol(IRC):
 
         #FIXME: refuse any other command before _USER, to avoid references to
         # undefined attributes
-        self.api = Twitter(self.the_user.nick, self.password)
+        self.api = Twitter(self.the_user.nick, self.password, base_url=BASE_URL)
         #FIXME; patch twitty-twister to accept agent=foobar
         self.api.agent = MYAGENT
 
