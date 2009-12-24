@@ -511,7 +511,7 @@ class TwitterIrcUserCache:
     def watch_user(self, u):
         self.watch_user_id(u._twitter_id)
 
-    def user_from_id(self, id):
+    def get_user(self, id):
         return self._get_user(id)
 
 
@@ -723,8 +723,7 @@ class MainChannel(TwitterChannel):
         def got_list(ids):
             dbg("Finished getting friend IDs")
             self.proto.dbg("you are following %d people" % (len(ids)))
-            self.proto.twitter_users.watch_user_ids(ids)
-            users = [self.proto.get_twitter_user(id) for id in ids]
+            users = [self.proto.get_twitter_user(id, watch=True) for id in ids]
             self.proto.twitter_users.fetch_friend_info(users)
             #FIXME: include the_user only if the user already joined
             d.callback([self.proto.the_user]+users)
@@ -743,8 +742,7 @@ class MainChannel(TwitterChannel):
         def got_user_info(u):
             user_ids.append(u.id)
             self.proto.global_twuser_cache.got_api_user_info(u)
-            self.proto.twitter_users.watch_user_id(u.id)
-            u = self.proto.twitter_users.user_from_id(u.id)
+            u = self.proto.get_twitter_user(u.id, watch=True)
             self.notifyJoin(u)
 
         def done(*args):
@@ -769,7 +767,7 @@ class MainChannel(TwitterChannel):
         def got_user_info(u):
             user_ids.append(u.id)
             self.proto.global_twuser_cache.got_api_user_info(u)
-            u = self.proto.twitter_users.user_from_id(u.id)
+            u = self.proto.get_twitter_user(u.id)
             self.notifyKick(sender, u)
 
         def done(*args):
@@ -848,8 +846,7 @@ class ListChannel(TwitterChannel):
             users = [self.proto.the_user]
             for tu in members:
                 self.proto.global_twuser_cache.got_api_user_info(tu)
-                self.proto.twitter_users.watch_user_id(tu.id)
-                users.append(self.proto.twitter_users.user_from_id(tu.id))
+                users.append(self.proto.get_twitter_user(tu.id, watch=True))
             d.callback(users)
 
         doit()
@@ -924,8 +921,13 @@ class PasserdProtocol(IRC):
     def set_user_var(self, var, value):
         return self.data.set_var(self.user_data, var, value)
 
-    def get_twitter_user(self, id):
-        return self.twitter_users.user_from_id(id)
+
+    def get_twitter_user(self, id, watch=False):
+        u = self.twitter_users.get_user(id)
+        if watch:
+            self.twitter_users.watch_user_id(id)
+        return u
+
 
     def dbg(self, msg):
         self.notice(msg)
@@ -1163,7 +1165,7 @@ class PasserdProtocol(IRC):
         def got_user(tu):
             self.dbg("got user info!")
             self.global_twuser_cache.got_api_user_info(tu)
-            u = self.twitter_users.user_from_id(tu.id)
+            u = self.get_twitter_user(tu.id)
             self.whois_twitter_user(u, tu)
 
         def error(e):
