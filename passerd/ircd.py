@@ -1906,7 +1906,7 @@ def parse_cmdline(args, opts):
 def setup_logging(opts):
 
     ch = logging.StreamHandler(opts.logstream)
-    f = logging.Formatter(logging.BASIC_FORMAT)
+    f = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s')
     ch.setFormatter(f)
 
     # root logger:
