@@ -251,7 +251,7 @@ class IrcChannel(IrcTarget):
 
         raise NotImplementedError("Ban setting is not implemented")
 
-    def sendMessage(self, sender, msg):
+    def send_message(self, sender, msg):
         self.proto.send_privmsg(sender, self, msg)
 
     def typeChar(self):
@@ -619,17 +619,10 @@ class TwitterChannel(IrcChannel):
 
     def printEntry(self, entry):
         u = self.proto.get_twitter_user(entry.user.id)
-        text = entry.text
-
         dbg("entry id: %r" % (entry.id))
-        # security:
-
+        text = entry.text
         dbg('entry text: %r' % (text))
-        text = full_entity_decode(text)
-        # security: remove invalid chars from text:
-        text = text.replace('\n', '').replace('\r', '')
-        dbg('entities decoded: %r' % (text))
-        self.sendMessage(u, text.encode('utf-8'))
+        self.proto.send_text(u, self, text)
 
     def got_entry(self, e):
         dbg("#twitter got_entry: %r" % (e))
@@ -944,10 +937,18 @@ class PasserdProtocol(IRC):
     def gotDirectMessage(self, msg):
         self.global_twuser_cache.got_api_user_info(msg.sender)
         sender = self.get_twitter_user(msg.sender.id, watch=True)
-        self.send_privmsg(sender, self.the_user, msg.text)
+        self.send_text(sender, self.the_user, msg.text)
 
     def dmError(self, e):
         self.notice("Error pulling Direct Messages: %s" % (e))
+
+    def send_text(self, sender, target, text):
+        # security:
+        text = full_entity_decode(text)
+        # security: remove invalid chars from text:
+        text = text.replace('\n', '').replace('\r', '')
+        dbg('entities decoded: %r' % (text))
+        self.send_privmsg(sender, target, text.encode(ENCODING))
 
     def connectionLost(self, reason):
         pinfo("connection to %s lost: %s", self.hostname, reason)
