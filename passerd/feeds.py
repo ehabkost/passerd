@@ -52,20 +52,20 @@ class TwitterFeed:
         self.continue_refreshing = False
         self.next_refresh = None
         self.loading = False
-        self._last_status_id = None
+        self._last_id = None
 
-    def _last_status_var(self):
-        return self.LAST_STATUS_VAR
+    def _last_id_var(self):
+        return self.LAST_ID_VAR
 
-    def update_last_status_id(self, status_id):
-        self._last_status_id = status_id
-        self.proto.set_user_var(self._last_status_var(), status_id)
+    def update_last_id(self, last_id):
+        self._last_id = last_id
+        self.proto.set_user_var(self._last_id_var(), last_id)
 
     @property
-    def last_status_id(self):
-        if self._last_status_id is None:
-            self._last_status_id = self.proto.user_var(self._last_status_var())
-        return self._last_status_id
+    def last_id(self):
+        if self._last_id is None:
+            self._last_id = self.proto.user_var(self._last_id_var())
+        return self._last_id
 
     def addCallback(self, *args, **kwargs):
         """Add a callback for new entries"""
@@ -89,17 +89,17 @@ class TwitterFeed:
         self.cancel_next_refresh()
         self.next_refresh = reactor.callLater(REFRESH_DELAY, self.refresh)
 
-    def _refresh(self, last_status=None):
-        if last_status is None:
-            last_status = self.last_status_id
+    def _refresh(self, last_id=None):
+        if last_id is None:
+            last_id = self.last_id
 
         entries = []
         d = defer.Deferred()
 
         def doit():
             args = {}
-            if last_status:
-                args['since_id'] = last_status
+            if last_id:
+                args['since_id'] = last_id
             args['count'] = str(QUERY_COUNT)
             self._timeline(got_entry, args).addCallbacks(finished, error)
             dbg("_refresh returning")
@@ -118,8 +118,8 @@ class TwitterFeed:
             dbg("finished loading %r" % (args,))
             for e in entries:
                 self.callbacks.callback(e)
-                if int(e.id) > int(self.last_status_id):
-                    self.update_last_status_id(e.id)
+                if self.last_id is None or int(e.id) > int(self.last_id):
+                    self.update_last_id(e.id)
             d.callback(len(entries))
 
         doit()
@@ -167,7 +167,7 @@ class ListTimelineFeed(TwitterFeed):
         self.list_user = list_user
         self.list_name = list_name
 
-    def _last_status_var(self):
+    def _last_id_var(self):
         return "last_status_id_@%s/%s" % (self.list_user, self.list_name)
 
     def _timeline(self, delegate, args):
@@ -176,7 +176,7 @@ class ListTimelineFeed(TwitterFeed):
 
 
 class HomeTimelineFeed(TwitterFeed):
-    LAST_STATUS_VAR = 'home_last_status_id'
+    LAST_ID_VAR = 'home_last_status_id'
 
     def _timeline(self, delegate, args):
         dbg("will try to use the API:")
@@ -184,7 +184,7 @@ class HomeTimelineFeed(TwitterFeed):
 
 
 class MentionsFeed(TwitterFeed):
-    LAST_STATUS_VAR = 'mentions_last_status_id'
+    LAST_ID_VAR = 'mentions_last_status_id'
 
     def _timeline(self, delegate, args):
         return self.api.mentions(delegate, args)
