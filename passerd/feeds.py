@@ -188,3 +188,9 @@ class MentionsFeed(TwitterFeed):
 
     def _timeline(self, delegate, args):
         return self.api.mentions(delegate, args)
+
+class DirectMessagesFeed(TwitterFeed):
+    LAST_ID_VAR = 'direct_messages_last_id'
+
+    def _timeline(self, delegate, args):
+        return self.api.direct_messages(delegate, args)
