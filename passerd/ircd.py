@@ -41,6 +41,8 @@ from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, MentionsFeed
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 
+from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
+
 
 MYAGENT = 'Passerd'
 #FIXME: use a real hostname?
@@ -428,6 +430,18 @@ class TwitterUserCache:
 
         return d
 
+    def lookup_screen_name(self, name):
+        # not 
+        try:
+            u = self.proto.data.query(TwitterUserData).filter_by(screen_name=name).one()
+        except MultipleResultsFound:
+            # multiple matches are possible if screen_names are reused.
+            # if that happens, be on the safe side: don't return anything
+            u = None
+        except NoResultFound:
+            u = None
+        return u
+
 
 class UnavailableTwitterData:
     """Fake TwitterUserData object for unavailable info"""
@@ -476,6 +490,17 @@ class CachedTwitterIrcUser(IrcUser):
     username = property(lambda self: str(self.data.twitter_screen_name))
     real_name = property(lambda self: self.data.twitter_name.encode('utf-8'))
     hostname = property(lambda self: 'twitter.com')
+
+
+class UnknownTwitterUser(IrcUser):
+    """An IrcUser object for an user we don't know anything about, but may be a valid Twitter user"""
+    def __init__(self, proto, nickname):
+        self.nick = nickname
+        self.username = nickname
+
+    real_name = 'Unknown User'
+    hostname = 'twitter.com'
+
 
 
 class TwitterIrcUserCache:
@@ -575,6 +600,7 @@ class TwitterIrcUserCache:
             self.fetch_individual_user_info(unknown_users)
         else:
             self.fetch_all_friend_info(unknown_users)
+
 
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):
@@ -1099,6 +1125,9 @@ class PasserdProtocol(IRC):
         for u in self.users:
             if nick == u.nick:
                 return u
+
+        # if not found, consider it's a potential Twitter user we don't know yet
+        return UnknownTwitterUser(self, nick)
 
     def create_channel(self, name):
         #TODO make it generic to allow more types of channels
