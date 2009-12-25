@@ -26,23 +26,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import logging
+
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relation, backref, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
 
-
+logger = logging.getLogger('passerd.data')
 
 Base = declarative_base()
 
+
+# poor-man sqlalchemy migration system:
+# (I don't want to depend on the availability of the python-migration package)
+class DataMigration(Base):
+    __tablename__ = 'data_migrations'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+
+
 class User(Base):
     __tablename__ = 'users'
-    __table_args__ = (
-        UniqueConstraint('twitter_login'),
-        {}
-    )
     id = Column(Integer, primary_key=True)
-    twitter_login = Column(String)
+    twitter_id = Column(Integer, unique=True)
+    twitter_login = Column(String, unique=True) # legacy field
     password_sha255 = Column(String)
 
 class UserVar(Base):
@@ -57,7 +65,6 @@ class UserVar(Base):
     name = Column(String)
     value = Column(String)
 
-
 class TwitterUserData(Base):
     """Cache of twitter user information"""
     __tablename__ = 'twitter_users'
@@ -66,6 +73,52 @@ class TwitterUserData(Base):
     twitter_name = Column(String)
 
 
+
+MIGRATIONS = []
+
+class Migration:
+    def __init__(self, name, func):
+        self.name = name
+        self.func = func
+
+    def _run(self, session):
+        logger.info("running data migration %s", self.name)
+        self.func(session)
+
+    def check(self, session):
+        r = session.query(DataMigration).filter_by(name=self.name).first()
+        if r is None:
+            self._run(session)
+            dm = DataMigration(name=self.name)
+            session.add(dm)
+            session.commit()
+
+# decorator:
+def migration(name):
+    def wrap(func):
+        m = Migration(name, func)
+        MIGRATIONS.append(m)
+        return m
+    return wrap
+
+
+## migrations functions: keep them in the right order:
+
+@migration('twitter_id_col')
+def twitter_id_col(s):
+    try:
+        s.execute('alter table "users" add column "twitter_id" integer')
+    except OperationalError:
+        # the column may exist, already. ignore errors
+        pass
+
+## end of migration functions
+
+
+def run_migrations(session):
+    for m in MIGRATIONS:
+        m.check(session)
+
 class DataStore:
     def __init__(self, url):
         self.engine = create_engine(url)
@@ -73,6 +126,7 @@ class DataStore:
 
     def create_tables(self):
         Base.metadata.create_all(self.engine)
+        run_migrations(self.session)
 
 
     def query(self, *args, **kwargs):
