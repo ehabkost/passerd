@@ -32,7 +32,13 @@ from twisted.internet import reactor, defer
 
 from passerd.callbacks import CallbackList
 
+# refresh delay in seconds. We don't have a rate-limiting scheduler (yet),
+# so be careful when increasing this. By default we have three feeds running:
+# home_timeline, direct_messages, and mentions. Keep this above 72 seconds
 REFRESH_DELAY = 90
+
+# 'count' paremeter for feed queries. It's a bit high, but this shouldn't be a
+# problem as we always use the last_id parameter.
 QUERY_COUNT = 100
 
 dbg = logging.debug
