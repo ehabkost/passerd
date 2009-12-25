@@ -132,20 +132,30 @@ class DataStore:
     def query(self, *args, **kwargs):
         return self.session.query(*args, **kwargs)
 
-    def new_user(self, login):
-        u = User(twitter_login=login)
+    def new_user(self, twitter_id, screen_name):
+        u = User(twitter_id=twitter_id, twitter_login=screen_name)
         self.session.add(u)
         self.session.commit()
         return u
 
-    #FIXME: use user ID, not screen_name
-    def get_user(self, login, create=False):
-        try:
-            return self.session.query(User).filter_by(twitter_login=login).one()
-        except NoResultFound:
-            if not create:
-                return None
-            return self.new_user(login)
+    def get_user(self, twitter_id, screen_name, create=False):
+        u = self.session.query(User).filter_by(twitter_id=twitter_id).first()
+        if u is not None:
+            return u
+
+        # look for old screen_name-based data:
+        u = self.session.query(User).filter_by(twitter_login=screen_name).first()
+        if u is not None:
+            logger.info("Converting old user data: screen_name: %s, id: %d" % (screen_name, twitter_id))
+            # old data. update it to use the Twitter user ID
+            u.twitter_id = twitter_id
+            self.session.commit()
+            return u
+
+        # not found:
+        if not create:
+            return None
+        return self.new_user(twitter_id, screen_name)
 
     def _var(self, user, var):
         return self.session.query(UserVar).filter_by(user_id=user.id, name=var).scalar()

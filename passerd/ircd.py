@@ -1105,7 +1105,7 @@ class PasserdProtocol(IRC):
 
     def credentials_ok(self, u):
         self.twitter_user_info = u
-        self.user_data = self.data.get_user(u.screen_name, create=True)
+        self.user_data = self.data.get_user(int(u.id), u.screen_name, create=True)
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
         self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
