@@ -37,7 +37,7 @@ from twisted.python import log
 from twittytwister.twitter import Twitter
 
 from passerd.data import DataStore, TwitterUserData
-from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, MentionsFeed
+from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, MentionsFeed, DirectMessagesFeed
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 
@@ -919,13 +919,19 @@ class PasserdProtocol(IRC):
         #FIXME: make joined_channels a more efficiente list of channels
         self.joined_channels = []
 
+        self.dm_feed = DirectMessagesFeed(self)
+        self.dm_feed.addCallback(self.gotDirectMessage)
+        self.dm_feed.addErrback(self.dmError)
+
         dbg("Got new client")
 
     def welcomeUser(self):
         for ch in self.autojoin_channels:
             self.join_channel(ch)
+        self.dm_feed.start_refreshing()
 
     def _userQuit(self, reason):
+        self.dm_feed.stop_refreshing()
         for ch in self.joined_channels:
             self.leave_channel(ch, reason)
         self.quit_sent = True
@@ -935,6 +941,13 @@ class PasserdProtocol(IRC):
             self._userQuit(reason)
             self.quit_sent = True
 
+    def gotDirectMessage(self, msg):
+        self.global_twuser_cache.got_api_user_info(msg.sender)
+        sender = self.get_twitter_user(msg.sender.id, watch=True)
+        self.send_privmsg(sender, self.the_user, msg.text)
+
+    def dmError(self, e):
+        self.notice("Error pulling Direct Messages: %s" % (e))
 
     def connectionLost(self, reason):
         pinfo("connection to %s lost: %s", self.hostname, reason)
