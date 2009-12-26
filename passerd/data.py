@@ -29,6 +29,7 @@
 import logging
 
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, UniqueConstraint
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relation, backref, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
@@ -85,13 +86,13 @@ class Migration:
         logger.info("running data migration %s", self.name)
         self.func(session)
 
-    def check(self, session):
-        r = session.query(DataMigration).filter_by(name=self.name).first()
+    def check(self, smaker):
+        s = smaker()
+        r = s.query(DataMigration).filter_by(name=self.name).first()
         if r is None:
-            self._run(session)
-            dm = DataMigration(name=self.name)
-            session.add(dm)
-            session.commit()
+            self._run(s)
+            s.add(DataMigration(name=self.name))
+            s.commit()
 
 # decorator:
 def migration(name):
@@ -102,22 +103,30 @@ def migration(name):
     return wrap
 
 
-## migrations functions: keep them in the right order:
+## migrations functions:
+
+# (please keep them in the right order)
 
 @migration('twitter_id_col')
 def twitter_id_col(s):
-    try:
-        s.execute('alter table "users" add column "twitter_id" integer')
-    except OperationalError:
-        # the column may exist, already. ignore errors
-        pass
+    md = MetaData(bind=s.connection())
+    md.reflect(only=['users'])
+
+    ut = md.tables['users']
+    if ut.columns.has_key('twitter_id'):
+        logger.info("Good: column users.twitter_id already exists")
+        return
+
+    s.execute('alter table "users" add column "twitter_id" integer')
+    s.commit()
 
 ## end of migration functions
 
 
-def run_migrations(session):
+def run_migrations(engine):
+    smaker = sessionmaker(bind=engine)
     for m in MIGRATIONS:
-        m.check(session)
+        m.check(smaker)
 
 class DataStore:
     def __init__(self, url):
@@ -126,7 +135,7 @@ class DataStore:
 
     def create_tables(self):
         Base.metadata.create_all(self.engine)
-        run_migrations(self.session)
+        run_migrations(self.engine)
 
 
     def query(self, *args, **kwargs):
