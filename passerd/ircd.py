@@ -1270,6 +1270,17 @@ class PasserdProtocol(IRC):
 
         self.welcomeUser()
 
+    def _do_password_auth(self):
+        """Run early password-authentication
+        
+        This should be used only on the early registration stages
+        """
+        twitter_username = self.the_user.nick
+        self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
+        #FIXME; patch twitty-twister to accept agent=foobar
+        self.api.agent = MYAGENT
+        self.check_credentials()
+
     def auth_if_possible(self):
         """Try password-authentication on Twitter, if already got enough info"""
         if self.api is not None:
@@ -1277,11 +1288,7 @@ class PasserdProtocol(IRC):
             return
 
         if self.password is not None and self.got_user and self.got_nick:
-            twitter_username = self.the_user.nick
-            self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
-            #FIXME; patch twitty-twister to accept agent=foobar
-            self.api.agent = MYAGENT
-            self.check_credentials()
+            self._do_password_auth()
 
     def irc_NICK(self, prefix, params):
         dbg("NICK %r" % (params))
