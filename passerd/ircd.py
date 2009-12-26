@@ -1224,6 +1224,8 @@ class PasserdProtocol(IRC):
     ### authentication code:
 
     def check_credentials(self):
+        d = defer.Deferred()
+
         ok = []
         def doit():
             self.notice("Checking Twitter credentials...")
@@ -1233,19 +1235,22 @@ class PasserdProtocol(IRC):
             self.notice("Credentials OK! Your Twitter user ID: %s. screen_name: %s" % (u.id, u.screen_name))
             self.credentials_ok(u)
             ok.append(1)
+            d.callback(u)
 
         def done(*args):
             if not ok:
+                d.errback(Exception("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :("))
                 self.notice("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :(")
                 self.send_reply(irc.ERR_FILEERROR, ":Error doing authentication on Twitter")
                 self.transport.loseConnection()
 
         def error(e):
-            #FIXME: send proper numeric error reply
+            d.errback(e)
             self.send_reply(irc.ERR_PASSWDMISMATCH, ":error validating Twitter credentials - %s" % (e.value))
             self.transport.loseConnection()
 
         doit()
+        return d
 
     def is_authenticated(self):
         return (self.authenticated_user is not None)
@@ -1266,7 +1271,7 @@ class PasserdProtocol(IRC):
         if self.api is not None:
             # already set up authentication
             return
-        
+
         if self.password is not None and self.got_user and self.got_nick:
             twitter_username = self.the_user.nick
             self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
