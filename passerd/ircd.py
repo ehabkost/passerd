@@ -892,7 +892,7 @@ class ListChannel(FriendlistMixIn, TwitterChannel):
                 self.list_name, params=params, page_delegate=page_delegate)
 
 
-class UserChannel(FriendlistMixIn, TwitterChannel):
+class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
 
     def __init__(self, proto, user):
         self.user = user
@@ -908,7 +908,7 @@ class UserChannel(FriendlistMixIn, TwitterChannel):
         return "User timeline -- %s" % (self.user)
 
     def _friendList(self, delegate, params={}, page_delegate=None):
-        return self.proto.api.list_friends(delegate, self.user, params=params,
+        return self.proto.api.friends_ids(delegate, self.user, params=params,
                 page_delegate=page_delegate)
 
 
