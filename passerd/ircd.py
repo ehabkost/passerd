@@ -754,13 +754,11 @@ class FriendlistMixIn:
         d = defer.Deferred()
         friends = set()
 
-        def finished(*args):
-            self.proto.dbg("finished: %r, friends so far: %d" % (args, len(friends)))
-
         def got_page(next, prev):
-            self.proto.dbg("got page: %s<-%s" % (next, prev))
+            self.proto.dbg("%s user list: got page: %s<-%s" % (self.name, next, prev))
+            self.proto.dbg("%s friends so far: %d" % (self.name, len(friends)))
             if not next or next == "0":
-                finished()
+                self.proto.dbg("%s user list: this was the last page" % (self.name))
                 d.callback(friends)
                 return
             doit(next)
@@ -768,7 +766,7 @@ class FriendlistMixIn:
         def doit(cursor):
             params = {"cursor": cursor}
             d = self._friendList(got_friend, params, page_delegate=got_page)
-            d.addCallbacks(finished, error)
+            d.addErrback(error)
 
         def got_friend(ref):
             friends.add(ref)
@@ -776,6 +774,7 @@ class FriendlistMixIn:
         def error(*args):
             self.proto.dbg("error: %r" % (args))
 
+        self.proto.dbg("I will fetch the list of users for %s" % (self.name))
         doit("-1")
         return d
 
