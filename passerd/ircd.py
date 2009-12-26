@@ -325,8 +325,8 @@ class IrcChannel(IrcTarget):
             dbg("got member list: %d members" % (len(members)))
             self._sendNames(members)
 
-        def error(*args):
-            dbg("ERROR: failure getting member names")
+        def error(e):
+            self.proto.notice("ERROR: failure getting member names for %s -- %s" % (self.name, e.value))
             #FIXME: include the_user only if the user already joined
             self._sendNames([self.proto.the_user])
 
