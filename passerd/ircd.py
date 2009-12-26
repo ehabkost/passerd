@@ -747,8 +747,7 @@ class MainChannel(TwitterChannel):
 
         def doit():
             self.proto.dbg("requesting list of friends...")
-            #FIXME: user proto.user_data instead of the_user.nick
-            self.proto.api.friends_ids(got_id, self.proto.the_user.nick).addCallbacks(finished, d.errback)
+            self.proto.api.friends_ids(got_id, str(self.proto.authenticated_user.screen_name)).addCallbacks(finished, d.errback)
 
         def got_id(id):
             ids.add(int(id))
