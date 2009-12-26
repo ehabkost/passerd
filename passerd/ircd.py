@@ -698,7 +698,7 @@ class TwitterChannel(IrcChannel):
 
         if cmd == 'rate':
             api = self.proto.api
-            self.proto.notice('Rate limit: %d. remaining: %d. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
+            self.proto.notice('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
             return
 
     def messageReceived(self, sender, msg):
