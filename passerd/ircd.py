@@ -1240,14 +1240,9 @@ class PasserdProtocol(IRC):
         def done(*args):
             if not ok:
                 d.errback(Exception("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :("))
-                self.notice("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :(")
-                self.send_reply(irc.ERR_FILEERROR, ":Error doing authentication on Twitter")
-                self.transport.loseConnection()
 
         def error(e):
             d.errback(e)
-            self.send_reply(irc.ERR_PASSWDMISMATCH, ":error validating Twitter credentials - %s" % (e.value))
-            self.transport.loseConnection()
 
         doit()
         return d
@@ -1266,35 +1261,43 @@ class PasserdProtocol(IRC):
         self.authenticated_user = u
         self.user_data = self.data.get_user(int(u.id), u.screen_name, create=True)
 
-        self._send_welcome_replies()
 
-        self.welcomeUser()
-
-    def _do_password_auth(self):
+    def _early_auth(self):
         """Run early password-authentication
         
         This should be used only on the early registration stages
         """
-        twitter_username = self.the_user.nick
-        self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
-        #FIXME; patch twitty-twister to accept agent=foobar
-        self.api.agent = MYAGENT
-        self.check_credentials()
+        def doit():
+            twitter_username = self.the_user.nick
+            self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
+            #FIXME; patch twitty-twister to accept agent=foobar
+            self.api.agent = MYAGENT
+            self.check_credentials().addCallbacks(done, error)
 
-    def auth_if_possible(self):
+        def done(u):
+            self._send_welcome_replies()
+            self.welcomeUser()
+
+        def error(e):
+            self.send_reply(irc.ERR_PASSWDMISMATCH, ":error validating Twitter credentials - %s" % (e.value))
+            self.transport.loseConnection()
+
+        doit()
+
+    def try_early_auth(self):
         """Try password-authentication on Twitter, if already got enough info"""
         if self.api is not None:
             # already set up authentication
             return
 
         if self.password is not None and self.got_user and self.got_nick:
-            self._do_password_auth()
+            self._early_auth()
 
     def irc_NICK(self, prefix, params):
         dbg("NICK %r" % (params))
         self.the_user.nick = params[0]
         self.got_nick = True
-        self.auth_if_possible()
+        self.try_early_auth()
 
     def irc_USER(self, prefix, params):
         dbg("USER %r" % (params))
@@ -1309,12 +1312,12 @@ class PasserdProtocol(IRC):
             self.send_reply(irc.ERR_PASSWDMISMATCH, ':You must use your Twitter password as password to connect')
             self.transport.loseConnection()
 
-        self.auth_if_possible()
+        self.try_early_auth()
 
 
     def irc_PASS(self, p, args):
         self.password = args[0]
-        self.auth_if_possible()
+        self.try_early_auth()
 
 
     def get_user(self, nick):
