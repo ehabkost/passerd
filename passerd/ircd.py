@@ -937,7 +937,7 @@ class PasserdProtocol(IRC):
 
         #FIXME: make the auto-join optional:
         self.autojoin_channels = [tc, mc]
-        #FIXME: make joined_channels a more efficiente list of channels
+        #FIXME: make joined_channels a more efficient list of channels
         self.joined_channels = []
 
         self.dm_feed = DirectMessagesFeed(self)
