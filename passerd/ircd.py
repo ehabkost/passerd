@@ -1071,7 +1071,7 @@ class PasserdProtocol(IRC):
 
             perror("Got an exception: %s", e.getErrorMessage())
             logger.exception(ex)
-            self.notice("*** An internal error has occurred. Sorry. -- %s" % (e.getErrorMessage()))
+            self.notice("*** An internal error has occurred. Sorry. -- %s: %s" % (e.type, e.getErrorMessage()))
 
         doit()
 
