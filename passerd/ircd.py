@@ -71,11 +71,22 @@ MAX_FRIEND_PAGE_REQS = 10
 
 LENGTH_LIMIT = 140
 
+
+
+# IRC protocol constants:
+
+# Other error codes we may use:
+ERR_NEEDREGGEDNICK = 477
+
+
+
+# logging helpers:
 logger = logging.getLogger("passerd")
 
 dbg = logger.debug
 pinfo = logger.info
 perror = logger.error
+
 
 
 def hooks(fn):
@@ -889,8 +900,16 @@ class ListChannel(TwitterChannel):
         return d
 
 def requires_auth(fn):
+    """A decorator for a generic authentication check before handling certain commands
+
+    This function should die soon. Having command-specific handling of
+    non-authenticated users would be better. Then we could make the commands
+    work as if everything is OK on the server, but without any real Twitter
+    user or channel available.
+    """
     def wrapper(self, *args, **kwargs):
-        self.check_authentication()
+        if not self.is_authenticated():
+            raise ErrorReply(irc.ERR_NOPRIVILEGES, ':Sorry, you must authenticate first')
         return fn(self, *args, **kwargs)
     return wrapper
 
@@ -1035,7 +1054,7 @@ class PasserdProtocol(IRC):
 
             perror("Got an exception: %s", e.getErrorMessage())
             logger.exception(ex)
-            self.server_notice(self.the_user, "*** An internal error has occurred. Sorry. -- %s" % (e.getErrorMessage()))
+            self.notice("*** An internal error has occurred. Sorry. -- %s" % (e.getErrorMessage()))
 
         doit()
 
@@ -1229,11 +1248,6 @@ class PasserdProtocol(IRC):
 
     def is_authenticated(self):
         return (self.twitter_user_info is not None)
-
-    def check_authentication(self):
-        """Checks if user is authenticated and raises an ERR_NOTREGISTERED ErrorReply exception if user is not authenticated yet"""
-        if not self.is_authenticated():
-            raise ErrorReply(irc.ERR_NOTREGISTERED, ':You have not registered')
 
     def credentials_ok(self, u):
         self.twitter_user_info = u
