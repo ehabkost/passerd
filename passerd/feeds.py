@@ -183,6 +183,19 @@ class HomeTimelineFeed(TwitterFeed):
         return self.api.home_timeline(delegate, args)
 
 
+class UserTimelineFeed(TwitterFeed):
+
+    def __init__(self, proto, user):
+        TwitterFeed.__init__(self, proto)
+        self.user = user
+
+    def _last_id_var(self):
+        return "last_status_id_@%s" % (self.user)
+
+    def _timeline(self, delegate, args):
+        return self.api.user_timeline(delegate, self.user, args)
+
+
 class MentionsFeed(TwitterFeed):
     LAST_ID_VAR = 'mentions_last_status_id'
 

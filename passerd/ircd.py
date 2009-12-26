@@ -37,9 +37,9 @@ from twisted.python import log
 from twittytwister.twitter import Twitter
 
 from passerd.data import DataStore, TwitterUserData
-from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, MentionsFeed, DirectMessagesFeed
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
+from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
@@ -898,6 +898,45 @@ class ListChannel(TwitterChannel):
         doit()
         return d
 
+class UserChannel(ListChannel):
+
+    def __init__(self, proto, user):
+        self.user = user
+        TwitterChannel.__init__(self, proto, self._channelName())
+
+    def _channelName(self):
+        return "#@%s" % (self.user)
+
+    def _createFeeds(self):
+        return [UserTimelineFeed(proto, self.user)]
+
+    def topic(self):
+        return "User timeline -- %s" % (self.user)
+
+    def get_member_list(self):
+        d = defer.Deferred()
+        friends = set()
+
+        def got_page(next, prev):
+            if not next or next == "0":
+                d.callback(friends)
+                return
+            doit(next)
+
+        def doit(cursor="-1"):
+            self.proto.dbg("requesting list of friends for @%s" %
+                    (self.user))
+            params = {"cursor": cursor}
+            self.proto.api.list_friends(friends.add, self.user, params=params,
+                    page_delegate=got_page).addCallbacks(lambda *args: None, error)
+
+        def error(*args):
+            self.proto.dbg("error: %r" % (args))
+
+        doit()
+        return d
+
+
 def requires_auth(fn):
     """A decorator for a generic authentication check before handling certain commands
 
@@ -911,6 +950,7 @@ def requires_auth(fn):
             raise ErrorReply(irc.ERR_NOPRIVILEGES, ':Sorry, you must authenticate first')
         return fn(self, *args, **kwargs)
     return wrapper
+
 
 class PasserdProtocol(IRC):
     def connectionMade(self):
@@ -1338,18 +1378,25 @@ class PasserdProtocol(IRC):
         dbg("about to join channel: %s" % (name))
         channel = None
         if name.startswith("#@"):
+            rawname = name[2:]
             try:
-                rawuser, list_name = name.split('/')
+                user, list_name = rawname.split('/', 1)
             except ValueError:
-                pass
+                # user channel:
+                user = rawname
+                if user:
+                    channel = UserChannel(self, user)
+                else:
+                    perror('invalid twitter user spec: %r' % (user))
             else:
-                user = rawuser[2:]
+                # list channel:
                 if not user or not list_name:
-                    perror('invalid list spec: %r' % (name))
-                    return None
-                channel = ListChannel(self, user, list_name)
-                self.channels[name] = channel
-        return channel
+                    perror('invalid twitter list spec: %r' % (name))
+                else:
+                    channel = ListChannel(self, user, list_name)
+        if channel:
+            self.channels[name] = channel
+            return channel
 
     def get_channel(self, name):
         return self.channels.get(name)
