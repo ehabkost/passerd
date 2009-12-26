@@ -566,6 +566,7 @@ class TwitterIrcUserCache:
         pass
 
     def fetch_all_friend_info(self, user, unknown_users):
+        #TODO: unify this paging code with the one on FriendlistMixIn
         reqs = []
         def request_cursor(cursor):
             self.proto.dbg("requesting a page from the friend list: %s" % (str(cursor)))
@@ -740,10 +741,11 @@ class FriendlistMixIn:
         users = []
         for u in userrefs:
             users.append(self._user_object(u))
-        #FIXME: 1) show the_user only if it really has joined the channel
-        #FIXME: 2) check if the_user is on the list used as input, and don't include it,
-        #          to avoid duplicate entries on the list
-        return [self.proto.the_user]+users
+        return users
+
+    def _fetch_user_info(self, users):
+        """Can be used to trigger fetching of complete user info, if needed"""
+        pass
 
     def _user_object(self, tu):
         """Can be overriden when get_friend_list() contains only user IDs"""
@@ -788,6 +790,14 @@ class FriendlistMixIn:
         def got_list(userrefs):
             dbg("Finished getting friend IDs for %s", self.name)
             users = self._handleUserRefs(userrefs)
+
+            #FIXME: call _fetch_user_info() on JOIN time, not on list_members() time
+            self._fetch_user_info(users)
+
+            #FIXME: 1) show the_user only if it really has joined the channel
+            #FIXME: 2) check if the_user is on the list used as input, and don't include it,
+            #          to avoid duplicate entries on the list
+            users = [self.proto.the_user]+users
             d.callback(users)
 
         doit()
@@ -865,6 +875,10 @@ class MainChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
 
         doit()
 
+    def _fetch_user_info(self, users):
+        self.proto.dbg("Now will fetch user info")
+        return self.proto.twitter_users.fetch_friend_info(str(self.proto.authenticated_user.screen_name), users)
+
 
 class MentionsChannel(TwitterChannel):
     """The #mentions channel"""
@@ -918,6 +932,8 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return self.proto.api.friends_ids(delegate, self.user, params=params,
                 page_delegate=page_delegate)
 
+    def _fetch_user_info(self, users):
+        return self.proto.twitter_users.fetch_friend_info(self.user, users)
 
 
 def requires_auth(fn):
