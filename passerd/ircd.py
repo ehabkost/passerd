@@ -111,6 +111,14 @@ def to_str(s):
     else:
         raise Exception("%r is not str (type: %r)" % (s, type(s)))
 
+
+class ErrorReply(Exception):
+    """Special exception class used to generate IRC numeric replies"""
+    def __init__(self, command, *args):
+        self.command = command
+        self.args = args
+
+
 class IrcTarget:
     """Common class for IRC channels and users
 
@@ -880,6 +888,12 @@ class ListChannel(TwitterChannel):
         doit()
         return d
 
+def requires_auth(fn):
+    def wrapper(self, *args, **kwargs):
+        self.check_authentication()
+        return fn(self, *args, **kwargs)
+    return wrapper
+
 class PasserdProtocol(IRC):
     def connectionMade(self):
         self.quit_sent = False
@@ -892,11 +906,16 @@ class PasserdProtocol(IRC):
         #FIXME: use real names
         self.myhost = MYHOST
         self.password = None
+
+
+        # fields that will be available only after authentication:
         self.api = None
+        self.twitter_user_info = None
+        self.user_data = None
 
         self.global_twuser_cache = self.factory.global_twuser_cache
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
-        self.twitter_user_info = None
+
 
         self.my_irc_server = IrcServer(self.myhost)
 
@@ -1007,8 +1026,15 @@ class PasserdProtocol(IRC):
             d.addErrback(error)
 
         def error(e):
+            ex = e.value
+
+            # ErrorReply exceptions are special: they generate a IRC error reply
+            if e.check(ErrorReply):
+                self.send_reply(ex.command, *ex.args)
+                return
+
             perror("Got an exception: %s", e.getErrorMessage())
-            logger.exception(e.value)
+            logger.exception(ex)
             self.server_notice(self.the_user, "*** An internal error has occurred. Sorry. -- %s" % (e.getErrorMessage()))
 
         doit()
@@ -1038,10 +1064,6 @@ class PasserdProtocol(IRC):
     def notice(self, msg):
         self.server_notice(self.the_user, msg)
 
-    def irc_PING(self, prefix, args):
-        self.server_message('PONG', args[0])
-
-
     def join_channel(self, chan):
         if not (chan in self.joined_channels):
             self.joined_channels.append(chan)
@@ -1065,12 +1087,17 @@ class PasserdProtocol(IRC):
         if channel is not None:
             self.join_channel(channel)
 
+    def irc_PING(self, prefix, args):
+        self.server_message('PONG', args[0])
+
+    @requires_auth
     def irc_JOIN(self, prefix, params):
         dbg("JOIN! %r %r" % (prefix, params))
         cnames = params[0]
         for c in cnames.split(','):
             self.join_cname(c)
 
+    @requires_auth
     def irc_PART(self, prefix, params):
         chans = params[0]
         reason = None
@@ -1079,6 +1106,7 @@ class PasserdProtocol(IRC):
         for c in chans.split(','):
             self.leave_cname(c, reason)
 
+    @requires_auth
     def irc_INVITE(self, prefix, params):
         nick = params[0]
         cname = params[1]
@@ -1086,6 +1114,7 @@ class PasserdProtocol(IRC):
         if chan is not None:
             chan.inviteUser(nick)
 
+    @requires_auth
     def irc_KICK(self, prefix, params):
         chans = params[0].split(',')
         users = params[1].split(',')
@@ -1094,6 +1123,7 @@ class PasserdProtocol(IRC):
             if chan is not None:
                 chan.kickUsers(self.the_user, users)
 
+    @requires_auth
     def irc_QUIT(self, pref, params):
         reason = None
         if len(params) > 0:
@@ -1103,9 +1133,75 @@ class PasserdProtocol(IRC):
         self.sendMessage('ERROR', ':Quit command received')
         self.transport.loseConnection()
 
-    def irc_NICK(self, prefix, params):
-        dbg("NICK %r" % (params))
-        self.the_user.nick = params[0]
+    @requires_auth
+    def irc_WHO(self, p, args):
+        for m in self.who_matches(args[0]):
+            self.send_reply(irc.RPL_WHOREPLY, *m)
+        self.send_reply(irc.RPL_ENDOFWHO, ':End of WHO list')
+
+    @requires_auth
+    def irc_WHOIS(self, p, args):
+        if len(args) > 2:
+            # invalid command
+            return
+        elif len(args) == 2:
+            # ignore server part
+            masks = args[1]
+        else:
+            masks = args[0]
+
+        masks = masks.split(',')
+        for m in masks:
+            self.whois_mask(m)
+
+    @requires_auth
+    def irc_MODE(self, p, args):
+        tname = args[0]
+        target = self.get_target(tname)
+        if target is None:
+            self.send_reply(irc.ERR_NOSUCHNICK, tname, ':No such nick/channel')
+            return
+        target.modeRequest(self.the_user, args)
+
+    @requires_auth
+    def irc_USERHOST(self, p, args):
+        if len(args) > 5:
+            args = args[:5]
+        r = []
+        for a in args:
+            u = self.get_user(a)
+            if u:
+                r.append('%s=%s%s' % (u.nick, u.away_char(), u.userhost()))
+        if r:
+            self.send_reply(irc.RPL_USERHOST, ':%s' % (' '.join(r)))
+
+    @requires_auth
+    def irc_PRIVMSG(self, prefix, args):
+        tname = args[0]
+        msg = args[1]
+
+        sender = self.the_user
+        target = self.get_target(tname)
+        if target is None:
+            self.send_reply(irc.ERR_NOSUCHNICK, tname, ':No such nick/channel')
+            return
+
+        # CTCP data:
+        if msg[0]==irc.X_DELIM:
+            m = irc.ctcpExtract(msg)
+            if m['extended']:
+                target.ctcpQueryReceived(sender, m['extended'])
+            # I won't handle the m['normal'] part. I don't trust this level of
+            # crazyness on the protocol
+        else:
+            target.messageReceived(sender, msg)
+
+    def irc_unknown(self, prefix, cmd, params):
+        dbg("CMD! %r %r %r" % (prefix, cmd, params))
+        self.dbg("Got unknown command: %r %r %r" % (prefix, cmd, params))
+        self.send_reply(irc.ERR_UNKNOWNCOMMAND, cmd, ':Unknown command')
+
+    ### authentication code:
 
     def check_credentials(self):
         ok = []
@@ -1131,6 +1227,13 @@ class PasserdProtocol(IRC):
 
         doit()
 
+    def is_authenticated(self):
+        return (self.twitter_user_info is not None)
+
+    def check_authentication(self):
+        """Checks if user is authenticated and raises an ERR_NOTREGISTERED ErrorReply exception if user is not authenticated yet"""
+        if not self.is_authenticated():
+            raise ErrorReply(irc.ERR_NOTREGISTERED, ':You have not registered')
 
     def credentials_ok(self, u):
         self.twitter_user_info = u
@@ -1142,6 +1245,10 @@ class PasserdProtocol(IRC):
         self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
         self.welcomeUser()
+
+    def irc_NICK(self, prefix, params):
+        dbg("NICK %r" % (params))
+        self.the_user.nick = params[0]
 
     def irc_USER(self, prefix, params):
         dbg("USER %r" % (params))
@@ -1162,6 +1269,8 @@ class PasserdProtocol(IRC):
 
     def irc_PASS(self, p, args):
         self.password = args[0]
+
+
 
     def get_user(self, nick):
         #FIXME; index by nickname
@@ -1215,11 +1324,6 @@ class PasserdProtocol(IRC):
             #XXX: WTF do "H" and "G" mean?
             yield ('*', u.username, u.hostname, self.myhost, u.nick, 'H', ':0', u.real_name)
 
-    def irc_WHO(self, p, args):
-        for m in self.who_matches(args[0]):
-            self.send_reply(irc.RPL_WHOREPLY, *m)
-        self.send_reply(irc.RPL_ENDOFWHO, ':End of WHO list')
-
     def whois_twitter_user(self, u, tu):
         self.send_reply(irc.RPL_WHOISUSER, u.nick, u.username, u.hostname, '*', ':%s' % (u.real_name))
         #FIXME: find a better way to send user information, instead of RPL_AWAY
@@ -1246,65 +1350,6 @@ class PasserdProtocol(IRC):
             self.send_reply(irc.ERR_NOSUCHNICK, mask, ':Error fetching user info - %s' % (e.value))
 
         doit()
-
-    def irc_WHOIS(self, p, args):
-        if len(args) > 2:
-            # invalid command
-            return
-        elif len(args) == 2:
-            # ignore server part
-            masks = args[1]
-        else:
-            masks = args[0]
-
-        masks = masks.split(',')
-        for m in masks:
-            self.whois_mask(m)
-
-    def irc_MODE(self, p, args):
-        tname = args[0]
-        target = self.get_target(tname)
-        if target is None:
-            self.send_reply(irc.ERR_NOSUCHNICK, tname, ':No such nick/channel')
-            return
-        target.modeRequest(self.the_user, args)
-
-    def irc_USERHOST(self, p, args):
-        if len(args) > 5:
-            args = args[:5]
-        r = []
-        for a in args:
-            u = self.get_user(a)
-            if u:
-                r.append('%s=%s%s' % (u.nick, u.away_char(), u.userhost()))
-        if r:
-            self.send_reply(irc.RPL_USERHOST, ':%s' % (' '.join(r)))
-
-    def irc_PRIVMSG(self, prefix, args):
-        tname = args[0]
-        msg = args[1]
-
-        sender = self.the_user
-        target = self.get_target(tname)
-        if target is None:
-            self.send_reply(irc.ERR_NOSUCHNICK, tname, ':No such nick/channel')
-            return
-
-        # CTCP data:
-        if msg[0]==irc.X_DELIM:
-            m = irc.ctcpExtract(msg)
-            if m['extended']:
-                target.ctcpQueryReceived(sender, m['extended'])
-            # I won't handle the m['normal'] part. I don't trust this level of
-            # crazyness on the protocol
-        else:
-            target.messageReceived(sender, msg)
-
-    def irc_unknown(self, prefix, cmd, params):
-        dbg("CMD! %r %r %r" % (prefix, cmd, params))
-        self.dbg("Got unknown command: %r %r %r" % (prefix, cmd, params))
-        self.send_reply(irc.ERR_UNKNOWNCOMMAND, cmd, ':Unknown command')
-
 
 class PasserdFactory(Factory):
     protocol = PasserdProtocol
