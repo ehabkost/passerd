@@ -71,9 +71,11 @@ MAX_FRIEND_PAGE_REQS = 10
 
 LENGTH_LIMIT = 140
 
-dbg = logging.debug
-pinfo = logging.info
-perror = logging.error
+logger = logging.getLogger("passerd")
+
+dbg = logger.debug
+pinfo = logger.info
+perror = logger.error
 
 
 def hooks(fn):
