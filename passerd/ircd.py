@@ -632,7 +632,7 @@ class TwitterChannel(IrcChannel):
             f.addErrback(self.refresh_error)
 
     def _createFeeds(self):
-        raise NotImplementedError
+        raise NotImplementedError("_createFeeds not implemented on %s" % (self.name))
 
     def userModeChar(self, u):
         if u == self.proto.the_user:
@@ -734,7 +734,7 @@ class FriendlistMixIn:
     """An extension to TwitterChannel to handle list of friends/members"""
 
     def _friendList(self, delegate, params={}, page_delegate=None):
-        raise NotImplementedError
+        raise NotImplementedError("_friendList not implemented")
 
     def _handleUserRefs(self, userrefs):
         users = []
