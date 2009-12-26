@@ -736,8 +736,12 @@ class FriendlistMixIn:
     def _friendList(self, delegate, params={}, page_delegate=None):
         raise NotImplementedError
 
-    def _handleUserRefs(self, friends):
-        raise NotImplementedError
+    def _handleUserRefs(self, userrefs):
+        users = []
+        for tu in userrefs:
+            self.proto.global_twuser_cache.got_api_user_info(tu)
+            users.append(self.proto.get_twitter_user(tu.id, watch=True))
+        return users
 
     def get_friend_list(self):
         d = defer.Deferred()
@@ -783,10 +787,18 @@ class FriendlistMixIn:
         doit()
         return d
 
+class FriendIDsMixIn:
+
+    def _handleUserRefs(self, userrefs):
+        users = [self.proto.get_twitter_user(int(rawid), watch=True) for rawid in userrefs]
+        self.proto.twitter_users.fetch_friend_info(users)
+        return [self.proto.the_user] + users
+
+
 
 #TODO: make mentions appear on #twitter, if configured to do so
 
-class MainChannel(FriendlistMixIn, TwitterChannel):
+class MainChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
     """The #twitter channel"""
 
     def topic(self):
@@ -798,11 +810,6 @@ class MainChannel(FriendlistMixIn, TwitterChannel):
     def _friendList(self, delegate, params={}, page_delegate=None):
         return self.proto.api.friends_ids(delegate, str(self.proto.authenticated_user.screen_name),
                 params=params, page_delegate=page_delegate)
-
-    def _handleUserRefs(self, userrefs):
-        users = [self.proto.get_twitter_user(int(rawid), watch=True) for rawid in userrefs]
-        self.proto.twitter_users.fetch_friend_info(users)
-        return [self.proto.the_user] + users
 
     def inviteUser(self, nickname):
         #TODO: send a better error message if user is already being followed
@@ -884,13 +891,6 @@ class ListChannel(FriendlistMixIn, TwitterChannel):
         return self.proto.api.list_members(delegate, self.list_user,
                 self.list_name, params=params, page_delegate=page_delegate)
 
-    def _handleUserRefs(self, userrefs):
-        users = [self.proto.the_user]
-        for tu in userrefs:
-            self.proto.global_twuser_cache.got_api_user_info(tu)
-            users.append(self.proto.get_twitter_user(tu.id, watch=True))
-        return users
-
 
 class UserChannel(FriendlistMixIn, TwitterChannel):
 
@@ -911,12 +911,6 @@ class UserChannel(FriendlistMixIn, TwitterChannel):
         return self.proto.api.list_friends(delegate, self.user, params=params,
                 page_delegate=page_delegate)
 
-    def _handleUserRefs(self, userrefs):
-        users = []
-        for tu in userrefs:
-            self.proto.global_twuser_cache.got_api_user_info(tu)
-            users.append(self.proto.get_twitter_user(tu.id, watch=True))
-        return users
 
 
 def requires_auth(fn):
