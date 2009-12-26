@@ -929,7 +929,7 @@ class PasserdProtocol(IRC):
 
         # fields that will be available only after authentication:
         self.api = None
-        self.twitter_user_info = None
+        self.authenticated_user = None
         self.user_data = None
 
         self.global_twuser_cache = self.factory.global_twuser_cache
@@ -1247,10 +1247,10 @@ class PasserdProtocol(IRC):
         doit()
 
     def is_authenticated(self):
-        return (self.twitter_user_info is not None)
+        return (self.authenticated_user is not None)
 
     def credentials_ok(self, u):
-        self.twitter_user_info = u
+        self.authenticated_user = u
         self.user_data = self.data.get_user(int(u.id), u.screen_name, create=True)
 
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
