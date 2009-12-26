@@ -902,7 +902,7 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return "#@%s" % (self.user)
 
     def _createFeeds(self):
-        return [UserTimelineFeed(proto, self.user)]
+        return [UserTimelineFeed(self.proto, self.user)]
 
     def topic(self):
         return "User timeline -- %s" % (self.user)
