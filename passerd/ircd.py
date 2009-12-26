@@ -738,12 +738,19 @@ class FriendlistMixIn:
 
     def _handleUserRefs(self, userrefs):
         users = []
-        for tu in userrefs:
-            self.proto.global_twuser_cache.got_api_user_info(tu)
-            users.append(self.proto.get_twitter_user(tu.id, watch=True))
-        return users
+        for u in userrefs:
+            users.append(self._user_object(u))
+        #FIXME: 1) show the_user only if it really has joined the channel
+        #FIXME: 2) check if the_user is on the list used as input, and don't include it,
+        #          to avoid duplicate entries on the list
+        return [self.proto.the_user]+users
 
-    def get_friend_list(self):
+    def _user_object(self, tu):
+        """Can be overriden when get_friend_list() contains only user IDs"""
+        self.proto.global_twuser_cache.got_api_user_info(tu)
+        return self.proto.get_twitter_user(tu.id, watch=True)
+
+    def _get_friend_list(self):
         d = defer.Deferred()
         friends = set()
 
@@ -777,7 +784,7 @@ class FriendlistMixIn:
         ids = []
 
         def doit():
-            self.get_friend_list().addCallbacks(got_list, d.errback)
+            self._get_friend_list().addCallbacks(got_list, d.errback)
 
         def got_list(userrefs):
             dbg("Finished getting friend IDs for %s", self.name)
@@ -788,12 +795,9 @@ class FriendlistMixIn:
         return d
 
 class FriendIDsMixIn:
-
-    def _handleUserRefs(self, userrefs):
-        users = [self.proto.get_twitter_user(int(rawid), watch=True) for rawid in userrefs]
-        self.proto.twitter_users.fetch_friend_info(users)
-        return [self.proto.the_user] + users
-
+    """MixIn that can be used when the friend list is just a list of IDs"""
+    def _user_object(self, id):
+        return self.proto.get_twitter_user(int(id), watch=True)
 
 
 #TODO: make mentions appear on #twitter, if configured to do so
@@ -908,6 +912,9 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return "User timeline -- %s" % (self.user)
 
     def _friendList(self, delegate, params={}, page_delegate=None):
+        #TODO: include the user on the list of channel members, too
+        #      (the user whose timeline is being followed, not the Passerd
+        #      authenticated user)
         return self.proto.api.friends_ids(delegate, self.user, params=params,
                 page_delegate=page_delegate)
 
