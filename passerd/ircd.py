@@ -565,12 +565,12 @@ class TwitterIrcUserCache:
         #TODO: implement me
         pass
 
-    def fetch_all_friend_info(self, unknown_users):
+    def fetch_all_friend_info(self, user, unknown_users):
         reqs = []
         def request_cursor(cursor):
             self.proto.dbg("requesting a page from the friend list: %s" % (str(cursor)))
             reqs.append(cursor)
-            self.proto.api.list_friends(got_user, params={'cursor':cursor},
+            self.proto.api.list_friends(got_user, user=user, params={'cursor':cursor},
                                         page_delegate=end_page).addCallbacks(done, error)
 
         def got_user(u):
@@ -581,7 +581,7 @@ class TwitterIrcUserCache:
             num = len(unk)
 
             if num == 0:
-                self.proto.notice("I know all of your friends, now!")
+                self.proto.notice("I know all friends of %s, now!" % (user))
                 return
 
             self.proto.dbg("%d users are still unknown" % (num))
@@ -606,21 +606,21 @@ class TwitterIrcUserCache:
 
         request_cursor('-1')
 
-    def fetch_friend_info(self, users):
+    def fetch_friend_info(self, user, friends):
         dbg("fetch_friend_info: begin:")
-        unknown_users = [u for u in users if not u.has_data()]
-        dbg("fetch_friend_info: got unknown users...")
+        unknown_users = [u for u in friends if not u.has_data()]
+        dbg("fetch_friend_info: got unknown friends...")
         if len(unknown_users) == 0:
-            self.proto.notice("I already know all your friends. cool!")
+            self.proto.notice("I already know all friends of %s. cool!" % (user))
             return
 
         dbg("%d unknown users..." % (len(unknown_users)))
-        self.proto.notice("There are %d users I don't know about. I will fetch your detailed friend list" % (len(unknown_users)))
+        self.proto.notice("There are %d users I don't know about. I will fetch the detailed friend list" % (len(unknown_users)))
 
         if len(unknown_users) < MAX_USER_INFO_FETCH:
             self.fetch_individual_user_info(unknown_users)
         else:
-            self.fetch_all_friend_info(unknown_users)
+            self.fetch_all_friend_info(user, unknown_users)
 
 
 class TwitterChannel(IrcChannel):
@@ -864,6 +864,7 @@ class MainChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
             self.proto.send_reply(irc.ERR_UNAVAILRESOURCE, nickname, ':Nick/channel is temporarily unavailable')
 
         doit()
+
 
 class MentionsChannel(TwitterChannel):
     """The #mentions channel"""
