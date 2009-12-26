@@ -605,11 +605,12 @@ class TwitterIrcUserCache:
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
-        self.feed = self._timelineFeed(proto)
-        self.feed.addCallback(self.got_entry)
-        self.feed.addErrback(self.refresh_error)
+        self.feeds = self._createFeeds()
+        for f in self.feeds:
+            f.addCallback(self.got_entry)
+            f.addErrback(self.refresh_error)
 
-    def _timelineFeed(self, proto):
+    def _createFeeds(self):
         raise NotImplementedError
 
     def userModeChar(self, u):
@@ -634,13 +635,18 @@ class TwitterChannel(IrcChannel):
         dbg("#twitter refresh error")
         self.proto.chan_notice(self, "error refreshing feed: %s" % (e.value))
 
-    def afterUserJoined(self, user):
-        dbg("user %s has joined!" % (user.full_id()))
-        self.feed.start_refreshing()
+    def start(self):
+        for f in self.feeds:
+            f.start_refreshing()
 
     def stop(self):
         dbg("stopping refresh of %s channel", self.name)
-        self.feed.stop_refreshing()
+        for f in self.feeds:
+            f.stop_refreshing()
+
+    def afterUserJoined(self, user):
+        dbg("user %s has joined!" % (user.full_id()))
+        self.start()
 
     def beforeUserLeft(self, user, reason):
         self.stop()
@@ -649,15 +655,16 @@ class TwitterChannel(IrcChannel):
         self.stop()
 
     def forceRefresh(self, last):
-        def doit():
-            self.feed._refresh(last_id=last).addCallback(done)
+        def doit(f):
+            f._refresh(last_id=last).addCallback(done)
 
         def done(num_args):
             if num_args == 0:
                 #FIXME: we are sending notice as if it was from the user, here
                 self.proto.chan_notice(self, 'people are quiet...')
 
-        doit()
+        for f in self.feeds:
+            doit(f)
 
     def commandReceived(self, cmd):
         """Handle lines starting with '!'
@@ -702,7 +709,7 @@ class TwitterChannel(IrcChannel):
         doit()
 
 
-#TODO: support multi-feed channel, so the mentions and home timeline appear on the same place
+#TODO: make mentions appear on #twitter, if configured to do so
 
 class MainChannel(TwitterChannel):
     """The #twitter channel"""
@@ -710,8 +717,8 @@ class MainChannel(TwitterChannel):
     def topic(self):
         return "Passerd -- Twitter home timeline channel"
 
-    def _timelineFeed(self, proto):
-        return HomeTimelineFeed(proto)
+    def _createFeeds(self):
+        return [HomeTimelineFeed(self.proto)]
 
     def get_friend_list(self):
         d = defer.Deferred()
@@ -806,8 +813,8 @@ class MentionsChannel(TwitterChannel):
     def topic(self):
         return "Passerd -- @mentions"
 
-    def _timelineFeed(self, proto):
-        return MentionsFeed(proto)
+    def _createFeeds(self):
+        return [MentionsFeed(self.proto)]
 
 
 class ListChannel(TwitterChannel):
@@ -817,8 +824,8 @@ class ListChannel(TwitterChannel):
         self.list_name = list_name
         TwitterChannel.__init__(self, proto, self._channelName())
 
-    def _timelineFeed(self, proto):
-        return ListTimelineFeed(proto, self.list_user, self.list_name)
+    def _createFeeds(self):
+        return [ListTimelineFeed(self.proto, self.list_user, self.list_name)]
 
     def _channelName(self):
         return "#@%s/%s" % (self.list_user, self.list_name)
