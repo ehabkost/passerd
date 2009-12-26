@@ -981,6 +981,9 @@ class PasserdProtocol(IRC):
     def dbg(self, msg):
         self.notice(msg)
 
+
+    ## overwrite some methods of the twisted.words IRC class:
+
     def sendMessage(self, *args, **kwargs):
         dbg("sending message: %r %r" % (args, kwargs))
         return IRC.sendMessage(self, *args, **kwargs)
@@ -989,9 +992,26 @@ class PasserdProtocol(IRC):
         dbg("sending line: %r %r" % (args, kwargs))
         return IRC.sendLine(self, *args, **kwargs)
 
+    def _handleCommand(self, command, prefix, params):
+        """Like IRC.handleCommand, but with no exception handling"""
+        method = getattr(self, "irc_%s" % command, None)
+        if method is not None:
+            return method(prefix, params)
+        else:
+            return self.irc_unknown(prefix, command, params)
+
     def handleCommand(self, *args, **kwargs):
-        dbg("got command: %r %r" % (args, kwargs))
-        return IRC.handleCommand(self, *args, **kwargs)
+        def doit():
+            dbg("got command: %r %r" % (args, kwargs))
+            d = defer.maybeDeferred(self._handleCommand, *args, **kwargs)
+            d.addErrback(error)
+
+        def error(e):
+            perror("Got an exception: %s", e.getErrorMessage())
+            logger.exception(e.value)
+            self.server_notice(self.the_user, "*** An internal error has occurred. Sorry. -- %s" % (e.getErrorMessage()))
+
+        doit()
 
     def send_reply(self, cmd, *params, **kwargs):
         return self.server_message(cmd, self.the_user.nick, *params, **kwargs)
