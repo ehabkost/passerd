@@ -52,6 +52,8 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     twitter_id = Column(Integer, unique=True)
     twitter_login = Column(String, unique=True) # legacy field
+    oauth_token = Column(String)
+    oauth_token_secret = Column(String)
     password_sha255 = Column(String)
 
 class UserVar(Base):
@@ -103,22 +105,31 @@ def migration(name):
     return wrap
 
 
+def add_column(session, table, column, type):
+    """Helper function to easily add a new table column"""
+    md = MetaData(bind=session.connection())
+    md.reflect(only=[table])
+
+    tb = md.tables[table]
+    if tb.columns.has_key(column):
+        logger.info("Good: column %s.%s already exists", table, column)
+        return
+
+    session.execute('alter table "%s" add column "%s" %s' % (table, column, type))
+    session.commit()
+
 ## migrations functions:
 
 # (please keep them in the right order)
 
 @migration('twitter_id_col')
 def twitter_id_col(s):
-    md = MetaData(bind=s.connection())
-    md.reflect(only=['users'])
+    add_column(s, 'users', 'twitter_id', 'INTEGER')
 
-    ut = md.tables['users']
-    if ut.columns.has_key('twitter_id'):
-        logger.info("Good: column users.twitter_id already exists")
-        return
-
-    s.execute('alter table "users" add column "twitter_id" integer')
-    s.commit()
+@migration('user_oauth_columns')
+def add_oauth_columns(s):
+    add_column(s, 'users', 'oauth_token', 'VARCHAR')
+    add_column(s, 'users', 'oauth_token_secret', 'VARCHAR')
 
 ## end of migration functions
 
@@ -182,6 +193,9 @@ class DataStore:
             self.session.add(v)
         else:
             v.value = value
+        self.session.commit()
+
+    def commit(self):
         self.session.commit()
 
 __all__ = ['DataStore', 'TwitterUserData']

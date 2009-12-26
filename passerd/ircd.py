@@ -32,9 +32,10 @@ from twisted.words.protocols.irc import IRC
 from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
 from twisted.python import log
+from twisted.web import client as twclient
 
 
-from twittytwister.twitter import Twitter
+from twittytwister.twitter import Twitter, TwitterClientInfo
 
 from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
@@ -43,15 +44,21 @@ from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, 
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
+import oauth.oauth as oauth
+
 
 MYAGENT = 'Passerd'
 #FIXME: use a real hostname?
 MYHOST = 'passerd.server'
+MYURL = 'http://passerd.raisama.net/'
 VERSION = '0.0.3'
+CLIENT_INFO = TwitterClientInfo(MYAGENT, VERSION, MYURL)
+
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
 
 BASE_URL = 'https://twitter.com'
+
 
 
 ENCODING = 'utf-8'
@@ -87,6 +94,19 @@ dbg = logger.debug
 pinfo = logger.info
 perror = logger.error
 
+
+
+# OAuth stuff:
+OAUTH_CONSUMER_KEY='1K2bNGyqs7dtDKTaTlfnQ'
+OAUTH_CONSUMER_SECRET='frpQHgjN21ajybwA0ZQ2utwlu9O6A36r8YLy6PxY5c'
+
+OAUTH_REQUEST_TOKEN_URL='http://twitter.com/oauth/request_token'
+OAUTH_ACCESS_TOKEN_URL='http://twitter.com/oauth/access_token'
+OAUTH_AUTHORIZE_URL='http://twitter.com/oauth/authorize'
+
+OAUTH_SIGN_METHOD=oauth.OAuthSignatureMethod_HMAC_SHA1()
+
+oauth_consumer= oauth.OAuthConsumer(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET)
 
 
 def hooks(fn):
@@ -1017,6 +1037,7 @@ class PasserdProtocol(IRC):
         self.user_data = None
         self.got_user = False
         self.got_nick = False
+        self.oauth_pin_callback = None
 
         self.global_twuser_cache = self.factory.global_twuser_cache
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
@@ -1308,17 +1329,16 @@ class PasserdProtocol(IRC):
 
     ### authentication code:
 
-    def check_credentials(self):
+    def check_credentials(self, api):
         d = defer.Deferred()
 
         ok = []
         def doit():
             self.notice("Checking Twitter credentials...")
-            self.api.verify_credentials(got_user).addCallbacks(done, error).addErrback(error)
+            api.verify_credentials(got_user).addCallbacks(done, error).addErrback(error)
 
         def got_user(u):
             self.notice("Credentials OK! Your Twitter user ID: %s. screen_name: %s" % (u.id, u.screen_name))
-            self.credentials_ok(u)
             ok.append(1)
             d.callback(u)
 
@@ -1342,9 +1362,27 @@ class PasserdProtocol(IRC):
         self.send_reply(irc.RPL_CREATED, ":This server was created by the Flying Spaghetti Monster")
         self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
-    def credentials_ok(self, u):
+
+    def set_authenticated_user(self, u):
         self.authenticated_user = u
         self.user_data = self.data.get_user(int(u.id), u.screen_name, create=True)
+
+
+    def _check_basic_auth(self, username, password):
+        """Run verify_credentials API call using basic auth
+
+        On success, pass a (api,auth_user) pair to the deferred callback
+        """
+        api = Twitter(username, password, base_url=BASE_URL) #, client_info=CLIENT_INFO)
+        #FIXME; patch twitty-twister to accept agent=foobar
+        api.agent = MYAGENT
+        def doit():
+            return self.check_credentials(api).addCallback(done)
+
+        def done(u):
+            return (api, u)
+
+        return doit()
 
 
     def _early_auth(self):
@@ -1353,13 +1391,13 @@ class PasserdProtocol(IRC):
         This should be used only on the early registration stages
         """
         def doit():
-            twitter_username = self.the_user.nick
-            self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
-            #FIXME; patch twitty-twister to accept agent=foobar
-            self.api.agent = MYAGENT
-            self.check_credentials().addCallbacks(done, error)
+            self._check_basic_auth(self.the_user.nick, self.password).addCallbacks(done, error)
 
-        def done(u):
+        def done(args):
+            api,u = args
+
+            self.api = api
+            self.set_authenticated_user(u)
             self._send_welcome_replies()
             self.welcomeUser()
 
@@ -1404,6 +1442,112 @@ class PasserdProtocol(IRC):
         self.password = args[0]
         self.try_early_auth()
 
+
+    ### Oauth authentication code:
+
+    def oauth_request_token(self):
+        def doit():
+            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, callback='oob', http_url=OAUTH_REQUEST_TOKEN_URL)
+            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, None)
+            return twclient.getPage(req.to_url()).addCallback(done)
+
+        def done(data):
+            return oauth.OAuthToken.from_string(data)
+
+        return doit()
+
+    def oauth_authorize_url(self, req_token):
+        req = oauth.OAuthRequest.from_token_and_callback(token=req_token, http_url=OAUTH_AUTHORIZE_URL)
+        return req.to_url()
+
+    def _oauth_send_verifier(self, req_token, verifier):
+        def doit():
+            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
+            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
+            return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST', headers=req.to_header()).addCallback(done)
+
+        def done(data):
+            self.notice("access token URL returned!")
+            return oauth.OAuthToken.from_string(data)
+
+        return doit()
+
+    def _get_oauth_token(self, udata):
+        d = defer.Deferred()
+        def doit():
+            self.notice("oauth: getting request token...")
+            self.oauth_request_token().addCallbacks(got_req_token, d.errback)
+
+        def got_req_token(req_token):
+            self.notice("oauth: got request token.")
+            self.oauth_pin_callback = lambda pin: got_pin(req_token, pin)
+            self.notice("Please go to %s and send the PIN to me" % (self.oauth_authorize_url(req_token)))
+
+        def got_pin(req_token, pin):
+            self.notice("Got pin: %s" % (pin))
+            self._oauth_send_verifier(req_token, pin).addCallbacks(got_access_token, d.errback)
+
+        def got_access_token(token):
+            self.notice("YAY!")
+            #TODO: check if token works, with check_credentials()
+            udata.oauth_token = token.key
+            udata.oauth_token_secret = token.secret
+            self.data.commit()
+            return token
+
+        doit()
+        return d
+
+    def get_oauth_token(self, udata):
+        token,secret = udata.oauth_token,udata.oauth_token_secret
+        if token is not None and secret is not None:
+            return success(oauth.OAuthToken(token, secret))
+
+        return self._get_oauth_token(udata)
+
+    def oauth_auth(self, args):
+        #FIXME: use Twitter screen_name, somehow, not user ID
+        id = args[0]
+        login = args[1]
+
+        udata = self.data.get_user(id, login)
+        if udata is None:
+            #FIXME: create user, if necessary
+            self.notice("No existing user data found")
+            return
+
+        self.notice("Setting up oauth authentication...")
+
+        def doit():
+            self.get_oauth_token(udata).addCallback(done, error)
+
+        def done(token):
+            self.notice('Got token: %s' % (token))
+
+        def error(e):
+            self.notice('ERROR getting oauth token')
+
+        doit()
+
+    def oauth_pin(self, args):
+        pin = args[0]
+        if self.oauth_pin_callback is None:
+            self.notice("Please use /OAUTH AUTH <id> <login> first")
+            return
+
+        self.notice("Thanks! Let's do it now...")
+        self.oauth_pin_callback(pin)
+
+    def irc_OAUTH(self, prefix, params):
+        cmd = params[0]
+        args = params[1:]
+        if cmd == 'auth':
+            self.oauth_auth(args)
+        elif cmd == 'pin':
+            self.oauth_pin(args)
+
+
+    ### end of oauth code
 
     def get_user(self, nick):
         #FIXME; index by nickname
