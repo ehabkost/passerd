@@ -1169,6 +1169,8 @@ class PasserdProtocol(IRC):
             if nick == u.nick:
                 return u
 
+        #TODO: use cache lookup_screen_name() method before returning UnknownTwitterUser()
+
         # if not found, consider it's a potential Twitter user we don't know yet
         return UnknownTwitterUser(self, nick)
 
