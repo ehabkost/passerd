@@ -930,6 +930,8 @@ class PasserdProtocol(IRC):
         self.api = None
         self.authenticated_user = None
         self.user_data = None
+        self.got_user = False
+        self.got_nick = False
 
         self.global_twuser_cache = self.factory.global_twuser_cache
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
@@ -1259,30 +1261,42 @@ class PasserdProtocol(IRC):
 
         self.welcomeUser()
 
+    def auth_if_possible(self):
+        """Try password-authentication on Twitter, if already got enough info"""
+        if self.api is not None:
+            # already set up authentication
+            return
+        
+        if self.password is not None and self.got_user and self.got_nick:
+            twitter_username = self.the_user.nick
+            self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
+            #FIXME; patch twitty-twister to accept agent=foobar
+            self.api.agent = MYAGENT
+            self.check_credentials()
+
     def irc_NICK(self, prefix, params):
         dbg("NICK %r" % (params))
         self.the_user.nick = params[0]
+        self.got_nick = True
+        self.auth_if_possible()
 
     def irc_USER(self, prefix, params):
         dbg("USER %r" % (params))
         username,_,_,real_name = params[0:4]
         self.the_user.username = username
         self.the_user.real_name = real_name
+        self.got_user = True
 
-        twitter_username = self.the_user.nick
+        if self.password is None:
+            self.send_reply(irc.ERR_PASSWDMISMATCH, ':You must use your Twitter password as password to connect')
+            self.transport.loseConnection()
 
-        #FIXME: refuse any other command before _USER, to avoid references to
-        # undefined attributes
-        self.api = Twitter(twitter_username, self.password, base_url=BASE_URL)
-        #FIXME; patch twitty-twister to accept agent=foobar
-        self.api.agent = MYAGENT
-
-        self.check_credentials()
+        self.auth_if_possible()
 
 
     def irc_PASS(self, p, args):
         self.password = args[0]
-
+        self.auth_if_possible()
 
 
     def get_user(self, nick):
