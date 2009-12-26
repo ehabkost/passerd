@@ -1287,6 +1287,8 @@ class PasserdProtocol(IRC):
         self.the_user.real_name = real_name
         self.got_user = True
 
+        #TODO: accept connections without password, and allow a nickserv-style method of authentication
+
         if self.password is None:
             self.send_reply(irc.ERR_PASSWDMISMATCH, ':You must use your Twitter password as password to connect')
             self.transport.loseConnection()
