@@ -942,7 +942,7 @@ def requires_auth(fn):
     This function should die soon. Having command-specific handling of
     non-authenticated users would be better. Then we could make the commands
     work as if everything is OK on the server, but without any real Twitter
-    user or channel available.
+    user or channels available.
     """
     def wrapper(self, *args, **kwargs):
         if not self.is_authenticated():
