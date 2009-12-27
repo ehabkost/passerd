@@ -1572,7 +1572,6 @@ class PasserdProtocol(IRC):
             if chan is not None:
                 chan.kickUsers(self.the_user, users)
 
-    @requires_auth
     def irc_QUIT(self, pref, params):
         reason = None
         if len(params) > 0:
@@ -1602,7 +1601,6 @@ class PasserdProtocol(IRC):
         for m in masks:
             self.whois_mask(m)
 
-    @requires_auth
     def irc_MODE(self, p, args):
         tname = args[0]
         target = self.get_target(tname)
