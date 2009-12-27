@@ -858,6 +858,7 @@ class FriendlistMixIn:
         return d
 
     def list_members(self):
+        #FIXME: return a empty (or almost-empty) list, if the user is not authenticated yet
         d = defer.Deferred()
         ids = []
 
