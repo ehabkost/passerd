@@ -1106,7 +1106,7 @@ class PasserdProtocol(IRC):
         self.send_text(sender, self.the_user, msg.text)
 
     def dmError(self, e):
-        self.notice("Error pulling Direct Messages: %s" % (e))
+        self.notice("Error pulling Direct Messages: %s" % (e.value))
 
     def send_text(self, sender, target, text):
         # security:
