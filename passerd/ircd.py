@@ -48,12 +48,13 @@ from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 import oauth.oauth as oauth
 
 
-MYAGENT = 'Passerd'
+MYNAME = 'Passerd'
+VERSION = '0.0.3'
+MYAGENT = '%s/%s' % (MYNAME, VERSION)
 #FIXME: use a real hostname?
 MYHOST = 'passerd.server'
 MYURL = 'http://passerd.raisama.net/'
-VERSION = '0.0.3'
-CLIENT_INFO = TwitterClientInfo(MYAGENT, VERSION, MYURL)
+CLIENT_INFO = TwitterClientInfo(MYNAME, VERSION, MYURL)
 
 SUPPORTED_USER_MODES = '0'
 SUPPORTED_CHAN_MODES = 'b'
