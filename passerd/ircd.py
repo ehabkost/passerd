@@ -742,6 +742,11 @@ class TwitterChannel(IrcChannel):
         for f in self.feeds:
             f.stop_refreshing()
 
+    def beforeUserJoined(self, user):
+        if not self.proto.is_authenticated():
+            # use the same numeric that Freenode uses
+            raise ErrorReply(ERR_NEEDREGGEDNICK, self.name, ':You need to be identified to join that channel')
+
     def afterUserJoined(self, user):
         dbg("user %s has joined!" % (user.full_id()))
         self.start()
@@ -1198,8 +1203,8 @@ class PasserdProtocol(IRC):
 
     def join_channel(self, chan):
         if not (chan in self.joined_channels):
-            self.joined_channels.append(chan)
             chan.userJoined(self.the_user)
+            self.joined_channels.append(chan)
 
     def leave_channel(self, chan, reason):
         if chan in self.joined_channels:
@@ -1222,14 +1227,12 @@ class PasserdProtocol(IRC):
     def irc_PING(self, prefix, args):
         self.server_message('PONG', args[0])
 
-    @requires_auth
     def irc_JOIN(self, prefix, params):
         dbg("JOIN! %r %r" % (prefix, params))
         cnames = params[0]
         for c in cnames.split(','):
             self.join_cname(c)
 
-    @requires_auth
     def irc_PART(self, prefix, params):
         chans = params[0]
         reason = None
