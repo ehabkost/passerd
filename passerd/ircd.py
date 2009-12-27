@@ -1024,7 +1024,7 @@ def requires_auth(fn):
     """
     def wrapper(self, *args, **kwargs):
         if not self.is_authenticated():
-            raise ErrorReply(irc.ERR_NOPRIVILEGES, ':Sorry, you must authenticate first')
+            raise ErrorReply(irc.ERR_NOPRIVILEGES, ':Sorry, you must authenticate first (%s command)' % (fn.__name__))
         return fn(self, *args, **kwargs)
     return wrapper
 
