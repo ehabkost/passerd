@@ -473,7 +473,50 @@ class UnavailableTwitterData:
     twitter_name = property(lambda self: 'Twitter User (info not fetched yet)')
 
 
-class CachedTwitterIrcUser(IrcUser):
+class TwitterIrcUser:
+    def _target_params(self, params):
+        """Must return a dictionary containing user_id or screen_name, depending on
+        how much information we already have about the user.
+        """
+        raise NotImplementedError("_target_params not implemented")
+
+    def send_direct_message(self, text):
+        d = defer.Deferred()
+        ok = []
+
+        def got_msg(msg):
+            ok.append(msg)
+            d.callback(msg)
+
+        def done(*args):
+            if not ok:
+                self.proto.notice("ERROR: Didn't get direct message info back when sending DM")
+
+        self.proto.api.send_direct_message(text, delegate=got_msg, params=self._target_params()).addCallbacks(done, d.errback)
+        return d
+
+    def messageReceived(self, sender, msg):
+        assert (sender is self.proto.the_user)
+
+        msg = try_unicode(msg)
+        if len(msg) > LENGTH_LIMIT:
+            #TODO: maybe there's a better error code for this?
+            self.proto.send_reply(irc.RPL_AWAY, self.nick, ':message too long (%d characters), not sent.' % (len(msg)))
+            return
+
+        def doit():
+            self.send_direct_message(msg).addCallbacks(done, error)
+
+        def done(msg):
+            self.proto.notice("Direct Message to %s sent. ID: %s" % (self.nick, msg.id))
+
+        def error(e):
+            self.proto.send_reply(irc.RPL_AWAY, self.nick, ":Error sending Direct Message: %s" % (e.value))
+
+        doit()
+
+
+class CachedTwitterIrcUser(TwitterIrcUser, IrcUser):
     """An IrcUser object for cached Twitter user info
 
     Objects of this class may be short-lived, just to return info of a random
@@ -484,6 +527,9 @@ class CachedTwitterIrcUser(IrcUser):
         self._twitter_id = id
         self.cache = cache
         self._data = None
+
+    def _target_params(self):
+        return {'user_id':self._twitter_id}
 
     def data_changed(self, old_info, new_info):
         dbg("CachedTwitterIrcUser.data_changed! %r %r" % (old_info, new_info))
@@ -513,14 +559,18 @@ class CachedTwitterIrcUser(IrcUser):
     hostname = property(lambda self: 'twitter.com')
 
 
-class UnknownTwitterUser(IrcUser):
+class UnknownTwitterUser(TwitterIrcUser, IrcUser):
     """An IrcUser object for an user we don't know anything about, but may be a valid Twitter user"""
     def __init__(self, proto, nickname):
+        self.proto = proto
         self.nick = nickname
         self.username = nickname
 
     real_name = 'Unknown User'
     hostname = 'twitter.com'
+
+    def _target_params(self):
+        return {'screen_name':self.nick}
 
 
 
