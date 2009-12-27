@@ -1941,11 +1941,14 @@ class PasserdProtocol(IRC):
         self.send_reply(irc.RPL_WHOISUSER, u.nick, u.username, u.hostname, '*', ':%s' % (u.real_name))
         #FIXME: find a better way to send user information, instead of RPL_AWAY
         #      - maybe just a pointer to a #!userinfo-nickname channel, where this info is available
-        self.send_reply(irc.RPL_AWAY, u.nick, ':Location: %s' % (tu.location).encode(ENCODING))
-        self.send_reply(irc.RPL_AWAY, u.nick, ':URL: %s' % (tu.url).encode(ENCODING))
-        self.send_reply(irc.RPL_AWAY, u.nick, ':Bio: %s' % (tu.description).encode(ENCODING))
-        self.send_reply(irc.RPL_AWAY, u.nick, ':Last update: %s' % (tu.status.text).encode(ENCODING))
-        self.send_reply(irc.RPL_AWAY, u.nick, ':Twitter URL: http://twitter.com/%s' % (tu.screen_name).encode(ENCODING))
+        def oneline(s):
+            return full_entity_decode(s).encode(ENCODING).replace('\n', ' ').replace('\r', ' ')
+
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Location: %s' % oneline(tu.location))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':URL: %s' % oneline(tu.url))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Bio: %s' % oneline(tu.description))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Last update: %s' % oneline(tu.status.text))
+        self.send_reply(irc.RPL_AWAY, u.nick, ':Twitter URL: http://twitter.com/%s' % oneline(tu.screen_name))
         self.send_reply(irc.RPL_ENDOFWHOIS, u.nick, ':End of WHOIS')
 
     def whois_mask(self, mask):
