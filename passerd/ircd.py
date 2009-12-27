@@ -817,14 +817,10 @@ class FriendlistMixIn:
 
         def doit(cursor):
             params = {"cursor": cursor}
-            d = self._friendList(got_friend, params, page_delegate=got_page)
-            d.addErrback(error)
+            self._friendList(got_friend, params, page_delegate=got_page).addErrback(d.errback)
 
         def got_friend(ref):
             friends.add(ref)
-
-        def error(*args):
-            self.proto.dbg("error: %r" % (args))
 
         self.proto.dbg("I will fetch the list of users for %s" % (self.name))
         doit("-1")
