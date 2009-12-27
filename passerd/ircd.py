@@ -68,6 +68,9 @@ FALLBACK_ENCODING = 'iso-8859-1'
 TWITTER_ENCODING = 'utf-8'
 
 
+# keep latest 100 post on each channel, to create in_reply_to field.
+REPLY_HISTORY_SIZE = 100
+
 # if more than MAX_USER_INFO_FETCH users are unknown, use /statuses/friends to fetch user info.
 # otherwise, just fetch individual user info
 
@@ -482,7 +485,7 @@ class TwitterUserCache:
     def lookup_screen_name(self, name):
         # not 
         try:
-            u = self.proto.data.query(TwitterUserData).filter_by(screen_name=name).one()
+            u = self.proto.data.query(TwitterUserData).filter_by(twitter_screen_name=name).one()
         except MultipleResultsFound:
             # multiple matches are possible if screen_names are reused.
             # if that happens, be on the safe side: don't return anything
@@ -704,9 +707,17 @@ class TwitterIrcUserCache:
             self.fetch_all_friend_info(user, unknown_users)
 
 
+REPLY_RE = re.compile(r'(@?)([a-zA-Z_]+)([:, ])')
+
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):
         IrcChannel.__init__(self, proto, name)
+
+        # REPLY_HISTORY_SIZE recent posts
+        self.recent_posts = []
+        # last post by each user ID
+        self.recent_by_user = {}
+
         self.feeds = self._createFeeds()
         for f in self.feeds:
             f.addCallback(self.got_entry)
@@ -729,10 +740,44 @@ class TwitterChannel(IrcChannel):
         dbg('entry text: %r' % (text))
         self.proto.send_text(u, self, text)
 
+    def _drop_one_old_entry(self):
+        # remove from two lists:
+        # - recent_posts
+        # - last_post_by_user
+        drop = self.recent_posts.pop(0)
+        uid = int(drop.user.id)
+
+        # check if it is on the recent_by_user list, too:
+        urec = self.recent_by_user.get(uid, [])
+        if len(urec) > 0:
+            # we always remove entries from recent_by_user, so
+            # it should be the first on the list:
+            if int(urec[0].id) == int(drop.id):
+                urec.pop(0)
+
+    def _add_to_history(self, e):
+        self.recent_posts.append(e)
+        if self.recent_posts > REPLY_HISTORY_SIZE:
+            self._drop_one_old_entry()
+        uid = int(e.user.id)
+        self.recent_by_user.setdefault(uid, []).append(e)
+
+    def last_post_id(self, nick):
+        u = self.proto.global_twuser_cache.lookup_screen_name(nick)
+        if u is None:
+            # nickname not found
+            return None
+        uid = u.twitter_id
+        recent = self.recent_by_user.get(uid, [])
+        if len(recent) < 1:
+            return None
+        return int(recent[-1].id)
+
     def got_entry(self, e):
-        dbg("#twitter got_entry: %r" % (e))
+        dbg("#twitter got_entry. id: %s", e.id)
         u = e.user
         self.proto.global_twuser_cache.got_api_user_info(u)
+        self._add_to_history(e)
         self.printEntry(e)
 
     def bot_msg(self, msg):
@@ -811,22 +856,55 @@ class TwitterChannel(IrcChannel):
         #TODO: make the behavior of "/me" messages configurable
         self.sendTwitterUpdate('/me %s' % (arg))
 
-    def sendTwitterUpdate(self, msg):
+    def _sendTwitterUpdate(self, msg, args):
         msg = try_unicode(msg)
         if len(msg) > LENGTH_LIMIT:
             self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
             return
 
         def doit():
-            self.proto.api.update(msg).addCallbacks(done, error)
+            self.proto.api.update(msg, params=args).addCallbacks(done, error)
 
         def done(*args):
-            self.proto.dbg("Success!!")
+            self.proto.dbg("Twitter update posted!!")
 
         def error(e):
-            self.proto.dbg("error while posting: %s" % (e))
+            self.bot_msg("%s: error while posting: %s" % (self.the_user.nick, e.value))
 
         doit()
+
+    def _add_in_reply_to(self, msg, args):
+        m = REPLY_RE.match(msg)
+        if m is None:
+            return msg
+
+        at = m.group(1)
+        nick = m.group(2)
+        end = m.group(3)
+
+        # just "username " at the beginning won't be considered
+        # a reply. User must use either "@username", "username:", or "username,"
+        if at != '@' and end == ' ':
+            return msg
+
+        #TODO: have some timing check, just in case the
+        #      last post is too recent to be replied to (e.g. 0.1 second ago)
+
+        last_post = self.last_post_id(nick)
+        if last_post:
+            args['in_reply_to_status_id'] = str(last_post)
+            if not msg.startswith("@"):
+                msg = "@"+msg
+
+        #TODO: add "@" for users that are on the channel, but haven't posted recently?
+
+        return msg
+
+    def sendTwitterUpdate(self, msg):
+        args = {}
+        msg = self._add_in_reply_to(msg, args)
+        dbg("msg: %r. args: %r", msg, args)
+        return self._sendTwitterUpdate(msg, args)
 
 
 class FriendlistMixIn:
