@@ -2,7 +2,7 @@ Credits
 -------
 
 * Passerd was written by:
-  * [Eduardo Habkost](http://twitter.com/ehabkost) <ehabkost@raisama.net>
+  * [Eduardo Habkost](http://twitter.com/ehabkost) (<ehabkost@raisama.net>)
 * With contributions from:
   * [Bogdano Arendartchuk](http://twitter.com/bhdn)
 * Early testing and ideas from:
