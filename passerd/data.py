@@ -34,6 +34,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relation, backref, sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
 
+import PBKDF2
+
 logger = logging.getLogger('passerd.data')
 
 Base = declarative_base()
@@ -54,7 +56,13 @@ class User(Base):
     twitter_login = Column(String, unique=True) # legacy field
     oauth_token = Column(String)
     oauth_token_secret = Column(String)
-    password_sha255 = Column(String)
+    password_crypt = Column(String)
+
+    def set_password(self, password):
+        self.password_crypt = PBKDF2.crypt(password)
+
+    def password_valid(self, password):
+        return PBKDF2.crypt(password, self.password_crypt) == self.password_crypt
 
 class UserVar(Base):
     __tablename__ = 'user_vars'
@@ -131,6 +139,10 @@ def add_oauth_columns(s):
     add_column(s, 'users', 'oauth_token', 'VARCHAR')
     add_column(s, 'users', 'oauth_token_secret', 'VARCHAR')
 
+@migration('user_password_crypt_column')
+def add_oauth_columns(s):
+    add_column(s, 'users', 'password_crypt', 'VARCHAR')
+
 ## end of migration functions
 
 
@@ -159,17 +171,19 @@ class DataStore:
         return u
 
     def get_user(self, twitter_id, screen_name, create=False):
-        u = self.session.query(User).filter_by(twitter_id=twitter_id).first()
-        if u is not None:
-            return u
+        if twitter_id is not None:
+            u = self.session.query(User).filter_by(twitter_id=twitter_id).first()
+            if u is not None:
+                return u
 
         # look for old screen_name-based data:
         u = self.session.query(User).filter_by(twitter_login=screen_name).first()
         if u is not None:
-            logger.info("Converting old user data: screen_name: %s, id: %d" % (screen_name, twitter_id))
-            # old data. update it to use the Twitter user ID
-            u.twitter_id = twitter_id
-            self.session.commit()
+            if twitter_id is not None:
+                logger.info("Converting old user data: screen_name: %s, id: %d" % (screen_name, twitter_id))
+                # old data. update it to use the Twitter user ID
+                u.twitter_id = twitter_id
+                self.session.commit()
             return u
 
         # not found:

@@ -24,7 +24,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import sys, logging, time
+import sys, logging, time, re, random
 import optparse
 
 from twisted.words.protocols import irc
@@ -83,7 +83,7 @@ LENGTH_LIMIT = 140
 # IRC protocol constants:
 
 # Other error codes we may use:
-ERR_NEEDREGGEDNICK = 477
+ERR_NEEDREGGEDNICK = '477'
 
 
 
@@ -148,6 +148,9 @@ class ErrorReply(Exception):
     def __init__(self, command, *args):
         self.command = command
         self.args = args
+
+class MissingOAuthRegistration(Exception):
+    pass
 
 
 class IrcTarget:
@@ -1014,6 +1017,302 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return self.proto.twitter_users.fetch_friend_info(self.user, users)
 
 
+class PasserdBot(IrcUser):
+    """The Passerd IRC bot, that is used for Passerd messages on the channel"""
+    def __init__(self, proto, nick):
+        self.proto = proto
+        self.nick = nick
+
+    real_name = 'Passerd Bot'
+    username = 'passerd'
+    hostname = MYHOST
+
+    def login_syntax(self, who):
+        self.proto.send_notice(self, who, "Syntax: LOGIN twitter-login password")
+        self.proto.send_notice(self, who, "If you don't have an account yet, join the #new-user-setup channel")
+
+    def command_login(self, who, parts):
+        if len(parts) <> 1:
+            return self.login_syntax(who)
+
+        parts = parts[0].split(' ', 1)
+        if len(parts) <> 2:
+            return self.login_syntax()
+
+        login,password = parts
+
+        def doit():
+            self.proto._do_auth(login, password).addCallback(done).addErrback(error)
+
+        def done(u):
+            self.proto.send_notice(self, who, "Welcome to Passerd, %s" % (u.screen_name))
+            self.proto.welcome_user()
+
+        def error(e):
+            self.proto.send_notice(self, who, "Error while authenticating: %s" % (e.value))
+            if e.check(MissingOAuthRegistration):
+                self.proto.redirect_to_new_user_setup()
+
+        doit()
+
+    def messageReceived(self, who, msg):
+        parts = msg.split(' ',1)
+        cmd = parts[0]
+        cmd = cmd.lower()
+        fn = getattr(self, 'command_%s' % (cmd), None)
+        if fn is None:
+            #TODO: add help message
+            self.proto.send_notice(self, who, "Sorry, I don't get it.")
+            return
+
+        return fn(who, parts[1:])
+
+
+class OAuthClient:
+    def __init__(self, url_cb=None, progress_cb=None):
+        self.verifier_callback = None
+        self.url_callback = url_cb
+        self.progress_cb = progress_cb
+
+    def progress(self, msg):
+        """Can be overwritten, to show a status message"""
+        if self.progress_cb:
+            self.progress_cb(msg)
+
+    def send_to_url(self, url):
+        """Must be overwritten"""
+        if self.url_callback:
+            self.url_callback(url)
+        else:
+            raise NotImplementedError("oauth send_to_url not implemented")
+
+    def got_verifier(self, verifier):
+        """Must be called when the verifier code is received"""
+        if self.verifier_callback:
+            return self.verifier_callback(verifier)
+        else:
+            raise Exception("Not waiting for OAuth verifier")
+
+    def request_token(self):
+        def doit():
+            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, callback='oob', http_url=OAUTH_REQUEST_TOKEN_URL)
+            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, None)
+            return twclient.getPage(req.to_url()).addCallback(done)
+
+        def done(data):
+            return oauth.OAuthToken.from_string(data)
+
+        return doit()
+
+    def authorize_url(self, req_token):
+        """Return the URL used for authorization"""
+        req = oauth.OAuthRequest.from_token_and_callback(token=req_token, http_url=OAUTH_AUTHORIZE_URL)
+        return req.to_url()
+
+    def _send_verifier(self, req_token, verifier):
+        def doit():
+            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
+            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
+            return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST', headers=req.to_header()).addCallback(done)
+
+        def done(data):
+            return oauth.OAuthToken.from_string(data)
+
+        return doit()
+
+    def get_oauth_token(self):
+        """Request a new oauth token
+
+        It returns a deferred, but you should use the returned Deferred only if
+        got_verifier() is called only once. If you are going to allow the user
+        to retry, use the Deferred returned by got_verifier()
+        """
+        d = defer.Deferred()
+        def doit():
+            self.progress("getting a request token...")
+            self.request_token().addCallbacks(got_req_token, d.errback)
+
+        def got_req_token(req_token):
+            self.progress("got request token.")
+
+            # now we will wait for the PIN:
+            self.verifier_callback = lambda pin: got_pin(req_token, pin)
+            self.send_to_url(self.authorize_url(req_token))
+
+        def got_pin(req_token, pin):
+            self.progress("getting access token...")
+            return self._send_verifier(req_token, pin).addCallback(got_access_token).addErrback(error)
+
+        def got_access_token(token):
+            self.progress("got the access token")
+            # the get_oauth_token() deferred works only once.
+            if not d.called:
+                d.callback(token)
+            return token
+
+        def error(e):
+            if not d.called:
+                # the get_oauth_token() deferred works only once.
+                d.errback(e)
+            return e
+
+        doit()
+        return d
+
+
+class UserSetupChannel(IrcChannel):
+    def __init__(self, proto, name):
+        IrcChannel.__init__(self, proto, name)
+        self.patterns = []
+        self.wait_for(r'.*', self.start_wizard)
+
+    def bot_message(self, msg):
+        self.send_message(self.proto.passerd_bot, msg)
+
+    def list_members(self):
+        return [self.proto.the_user, self.proto.passerd_bot]
+
+    def wait_for(self, regexp, func, flags=re.I, strip=True):
+        if strip:
+            filter = (lambda s: s.strip())
+        else:
+            filter = (lambda s: s)
+
+        self.patterns.insert(0, (filter, re.compile(regexp, flags), func) )
+
+    def afterUserJoined(self, who):
+        self.start_wizard()
+
+    def start_wizard(self):
+        def bm(msg):
+            self.bot_message(msg)
+
+        def welcome():
+            bm('Welcome!')
+            bm('On this channel, we will set up an account for you.')
+            bm("We will use the OAuth authentication method on Twitter,")
+            bm("so you don't even need to give me your Twitter password.  :)")
+            bm("Please tell me when you are ready, and we'll start the process")
+            bm("Are you ready?")
+            self.wait_for(r'^ *(y|yes|ok|start|restart) *$', start)
+            self.wait_for(r'^ *n|no', lambda *a: bm("no problem..."))
+
+        def ask_restart():
+            bm("Do you want to restart?")
+            self.wait_for('^ *y|yes', start)
+
+        def start(msg, m):
+            bm("OK, let's do it:")
+            bm("(Note: at any moment, you can type 'restart', and the process will be restarted)")
+            consumer = OAuthClient(url_cb=lambda url: show_url(consumer, url), progress_cb=show_progress)
+            consumer.get_oauth_token().addErrback(error_get_token)
+
+        def error_get_token(e):
+            bm("Error while trying to get an OAuth token: %s" % (e.value))
+
+        def show_progress(msg):
+            bm("oauth progress: %s" % (msg))
+
+        def show_url(consumer, url):
+            bm("Now, go to: %s" % (url))
+            bm("After authorizing Passerd to access your account, you'll get a PIN")
+            bm("Please paste the PIN here")
+            self.wait_for('[0-9]+', lambda msg,m: got_pin(consumer, m))
+
+        def got_pin(consumer, m):
+            pin = m.group(0)
+            bm("Got it. Thanks!")
+            consumer.got_verifier(pin).addCallback(pin_worked).addErrback(pin_error)
+
+        def pin_error(e):
+            bm("The PIN didn't work. I got this error: %s" % (e.value))
+
+        def pin_worked(token):
+            bm('The PIN worked!')
+            bm("Now I will check if I can access your account...")
+            self.proto.test_oauth_token(token).addCallback(token_works).addErrback(token_error)
+
+        def token_error(e):
+            bm("The OAuth authentication didn't work. Sorry  :(")
+            bm("Error message: %s" % (e.value))
+
+        def token_works(args):
+            token,api,u = args
+            bm("OAuth authentication worked!")
+
+            # change the user nickname to Twitter screen_name
+            nick = str(u.screen_name)
+            self.proto.the_user.force_nick(nick)
+            bm("Welcome to Passerd, %s" % (nick))
+
+            self.user_data = self.proto.set_user_token(u, token)
+            self.twitter_user = u
+            bm("Now Passerd can post to your account, but you still need to authenticate when connecting to Passerd")
+
+            bm("You have two authentication options:")
+            bm("1) Just use your Twitter password as password when connecting to Passerd")
+            bm("2) Set a password just for Passerd")
+            bm("Do you want to use your Twitter password to connect to Passerd?")
+            self.wait_for('no|^ *n', setup_password)
+            self.wait_for('yes|^ *y', all_set)
+
+        def all_set(msg,m):
+            bm("OK, so you are all set")
+            bye_twpass()
+            self.wait_for('.*', bye_twpass)
+
+        def bye_twpass(*args):
+            bm("Just reconnect to Passerd using your Twitter password,")
+            bm("and your Twitter username (%s) as nickname" % (self.twitter_user.screen_name))
+
+        def setup_password(msg,m):
+            bm("OK. Send your password as a message to the channel, and I will set it")
+            bm("Alternatively, I can generate a random password for you, just type 'generate' and I will do it")
+            bm("What will be your password?")
+            self.wait_for('.+', got_password)
+            self.wait_for('generate', gen_password)
+
+        def got_password(msg,m):
+            pw = msg
+            if len(pw) < 6:
+                bm("This is a short password! Are you sure you want to use it?")
+                self.wait_for('.*', setup_password)
+                self.wait_for('^ *y|yes', lambda msg,m: set_password(pw))
+            else:
+                set_password(pw)
+
+        def gen_password(msg,m):
+            length = 16
+            chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            pw = ''.join([random.choice(chars) for i in range(length)])
+            set_password(pw)
+
+        def set_password(pw):
+            self.proto.set_user_password(self.user_data, pw)
+            self.password = pw
+            bm("Password set to: %s" % (pw))
+            bye_pwset()
+            self.wait_for('.*', bye_pwset)
+
+        def bye_pwset(*args):
+            bm("Just reconnect to Passerd using your Passerd password: %s" % (self.password))
+            bm("and your Twitter username (%s) as nickname" % (self.twitter_user.screen_name))
+
+        welcome()
+
+    def messageReceived(self, sender, msg):
+        assert (sender is self.proto.the_user)
+        for filter,expr,func in self.patterns:
+            s = filter(msg)
+            m = expr.search(s)
+            if m:
+                try:
+                    func(msg, m)
+                except Exception,e:
+                    self.bot_message("An error has occurred. Sorry. -- %s" % (e))
+                return
+        self.bot_message("Sorry, I don't know what you mean")
+
 def requires_auth(fn):
     """A decorator for a generic authentication check before handling certain commands
 
@@ -1063,18 +1362,19 @@ class PasserdProtocol(IRC):
         u.hostname = self.hostname
         u.real_name = 'Unidentified User'
 
-        self.users = [self.the_user]
+        self.passerd_bot = PasserdBot(self, 'passerd-bot')
 
-        tc = MainChannel(self, '#twitter')
-        mc = MentionsChannel(self, '#mentions')
+        self.users = [self.the_user, self.passerd_bot]
+
+        predef_chans = [MainChannel(self, '#twitter'),  MentionsChannel(self, '#mentions'), UserSetupChannel(self, '#new-user-setup')]
 
         #TODO: keep a list of the fixed and joined channels,
         #      but use short-lived channel objects for other channel-query
         #      commands
-        self.channels = {'#twitter':tc, '#mentions':mc}
+        self.channels = dict([(c.name, c) for c in predef_chans])
 
         #FIXME: make the auto-join optional:
-        self.autojoin_channels = [tc, mc]
+        self.autojoin_channels = ['#twitter', '#mentions']
         #FIXME: make joined_channels a more efficient list of channels
         self.joined_channels = []
 
@@ -1084,10 +1384,22 @@ class PasserdProtocol(IRC):
 
         dbg("Got new client")
 
-    def welcomeUser(self):
+    def welcome_user(self):
         for ch in self.autojoin_channels:
-            self.join_channel(ch)
+            self.join_cname(ch)
         self.dm_feed.start_refreshing()
+
+    def welcome_anonymous(self):
+        self._send_welcome_replies()
+        self.notice("Welcome, anonymous user!")
+        self.notice("If you already have a Passerd account set up, identify yourself with the command: /MSG PASSERD-BOT LOGIN username password")
+        self.notice("If your account is not setup yet, please join the #new-user-setup channel to set up your account")
+
+
+    def redirect_to_new_user_setup(self):
+        """Send the user to the OAuth user setup channel"""
+        self.send_notice(self.passerd_bot, self.the_user, "Please join #new-user-setup to set up your account")
+        self.join_cname('#new-user-setup')
 
     def _userQuit(self, reason):
         self.dm_feed.stop_refreshing()
@@ -1336,22 +1648,23 @@ class PasserdProtocol(IRC):
 
     ### authentication code:
 
-    def check_credentials(self, api):
+    def check_credentials(self, api, method):
         d = defer.Deferred()
 
         ok = []
         def doit():
-            self.notice("Checking Twitter credentials...")
-            api.verify_credentials(got_user).addCallbacks(done, error).addErrback(error)
+            self.notice("Checking your credentials using %s..." % (method))
+            api.verify_credentials(got_user).addCallback(done).addErrback(error)
 
         def got_user(u):
-            self.notice("Credentials OK! Your Twitter user ID: %s. screen_name: %s" % (u.id, u.screen_name))
-            ok.append(1)
-            d.callback(u)
+            self.notice("%s authentication OK! Your Twitter user ID: %s. screen_name: %s" % (method, u.id, u.screen_name))
+            ok.append(u)
 
         def done(*args):
             if not ok:
                 d.errback(Exception("I got a reply from the Twitter server but no user info. This shouldn't have happened.  :("))
+            else:
+                d.callback(ok[0])
 
         def error(e):
             d.errback(e)
@@ -1369,48 +1682,128 @@ class PasserdProtocol(IRC):
         self.send_reply(irc.RPL_CREATED, ":This server was created by the Flying Spaghetti Monster")
         self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
+        #TODO: send a MOTD with useful information
+
 
     def set_authenticated_user(self, u):
         self.authenticated_user = u
         self.user_data = self.data.get_user(int(u.id), u.screen_name, create=True)
 
 
+    def _twitter_api(self, *args, **kwargs):
+        """Create a Twitter API object"""
+        api = Twitter(*args, **kwargs)
+        #FIXME; patch twitty-twister to accept agent=foobar
+        api.agent = MYAGENT
+        return api
+
     def _check_basic_auth(self, username, password):
         """Run verify_credentials API call using basic auth
 
         On success, pass a (api,auth_user) pair to the deferred callback
         """
-        api = Twitter(username, password, base_url=BASE_URL) #, client_info=CLIENT_INFO)
-        #FIXME; patch twitty-twister to accept agent=foobar
-        api.agent = MYAGENT
+        api = self._twitter_api(username, password, base_url=BASE_URL) #, client_info=CLIENT_INFO)
         def doit():
-            return self.check_credentials(api).addCallback(done)
+            return self.check_credentials(api, 'Password').addCallback(done)
 
         def done(u):
             return (api, u)
 
         return doit()
 
+    def test_oauth_token(self, token):
+        api = self._twitter_api(consumer=oauth_consumer, token=token)
+        def doit():
+            return self.check_credentials(api, 'OAuth').addCallback(done)
+
+        def done(u):
+            return (token, api, u)
+
+        return doit()
+
+    def set_user_token(self, u, token):
+        udata = self.data.get_user(int(u.id), u.screen_name, create=True)
+        udata.oauth_token = token.key
+        udata.oauth_token_secret = token.secret
+        self.data.commit()
+        return udata
+
+    def set_user_password(self, udata, pw):
+        udata.set_password(pw)
+        assert udata.password_valid(pw) # sanity check
+        self.data.commit()
+
+    def _do_auth(self, username, password):
+        """Authenticate username and password
+        """
+        d = defer.Deferred()
+        def try_local_password():
+            """Try to validate the password as a Passerd-only password"""
+            udata = self.data.get_user(None, username)
+            if udata is None:
+                return None
+            if not udata.password_valid(password):
+                return None
+
+            return udata
+
+        def doit():
+            # first, try the passerd-only passowrd:
+            udata = try_local_password()
+            if udata is not None:
+                self.notice("Your local Passerd password is valid")
+                return got_user(udata)
+
+            # if Passerd password doesn't work, try Twitter basic auth password:
+            self._check_basic_auth(username, password).addCallback(basic_auth_ok).addErrback(d.errback)
+
+        def basic_auth_ok(args):
+            api,u = args
+            udata = self.data.get_user(int(u.id), u.screen_name)
+            if udata is None:
+                return no_oauth_setup()
+            if not udata.oauth_token or not udata.oauth_token_secret:
+                return no_auth_setup()
+
+            got_user(udata)
+
+        def no_oauth_setup():
+            d.errback(MissingOAuthRegistration("OAuth registration not done yet"))
+
+        def got_user(udata):
+            token = oauth.OAuthToken(udata.oauth_token, udata.oauth_token_secret)
+            self.test_oauth_token(token).addCallback(oauth_works).addErrback(d.errback)
+
+        def oauth_works(args):
+            token,api,u = args
+
+            # authentication worked. set up variables:
+            self.api = api
+            self.set_authenticated_user(u)
+            d.callback(u)
+
+        doit()
+        return d
 
     def _early_auth(self):
         """Run early password-authentication
         
-        This should be used only on the early registration stages
+        This should be used only on the early registration stages.
         """
         def doit():
-            self._check_basic_auth(self.the_user.nick, self.password).addCallbacks(done, error)
+            self._do_auth(self.the_user.nick, self.password).addCallback(auth_ok).addErrback(error)
 
-        def done(args):
-            api,u = args
-
-            self.api = api
-            self.set_authenticated_user(u)
+        def auth_ok(u):
             self._send_welcome_replies()
-            self.welcomeUser()
+            self.welcome_user()
 
         def error(e):
-            self.send_reply(irc.ERR_PASSWDMISMATCH, ":error validating Twitter credentials - %s" % (e.value))
-            self.transport.loseConnection()
+            self.send_reply(irc.ERR_PASSWDMISMATCH, ":Error while authenticating - %s" % (e.value))
+            self.notice("Your connection will be considered anonymous, by now")
+            self._send_welcome_replies()
+            self.welcome_anonymous()
+            if e.check(MissingOAuthRegistration):
+                self.redirect_to_new_user_setup()
 
         doit()
 
@@ -1432,6 +1825,9 @@ class PasserdProtocol(IRC):
             self.the_user.nick = nick
             self.got_nick = True
             self.try_early_auth()
+
+    def irc_PASS(self, p, args):
+        self.password = args[0]
         self.try_early_auth()
 
     def irc_USER(self, prefix, params):
@@ -1443,120 +1839,16 @@ class PasserdProtocol(IRC):
 
         #TODO: accept connections without password, and allow a nickserv-style method of authentication
 
-        if self.password is None:
-            self.send_reply(irc.ERR_PASSWDMISMATCH, ':You must use your Twitter password as password to connect')
-            self.transport.loseConnection()
-
-        self.try_early_auth()
-
-
-    def irc_PASS(self, p, args):
-        self.password = args[0]
-        self.try_early_auth()
+        if self.password is not None:
+            # password set, try early authentication
+            self.try_early_auth()
+        else:
+            # not-authenticated-yet connection
+            self._send_welcome_replies()
+            self.welcome_anonymous()
 
 
     ### Oauth authentication code:
-
-    def oauth_request_token(self):
-        def doit():
-            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, callback='oob', http_url=OAUTH_REQUEST_TOKEN_URL)
-            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, None)
-            return twclient.getPage(req.to_url()).addCallback(done)
-
-        def done(data):
-            return oauth.OAuthToken.from_string(data)
-
-        return doit()
-
-    def oauth_authorize_url(self, req_token):
-        req = oauth.OAuthRequest.from_token_and_callback(token=req_token, http_url=OAUTH_AUTHORIZE_URL)
-        return req.to_url()
-
-    def _oauth_send_verifier(self, req_token, verifier):
-        def doit():
-            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
-            req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
-            return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST', headers=req.to_header()).addCallback(done)
-
-        def done(data):
-            self.notice("access token URL returned!")
-            return oauth.OAuthToken.from_string(data)
-
-        return doit()
-
-    def _get_oauth_token(self, udata):
-        d = defer.Deferred()
-        def doit():
-            self.notice("oauth: getting request token...")
-            self.oauth_request_token().addCallbacks(got_req_token, d.errback)
-
-        def got_req_token(req_token):
-            self.notice("oauth: got request token.")
-            self.oauth_pin_callback = lambda pin: got_pin(req_token, pin)
-            self.notice("Please go to %s and send the PIN to me" % (self.oauth_authorize_url(req_token)))
-
-        def got_pin(req_token, pin):
-            self.notice("Got pin: %s" % (pin))
-            self._oauth_send_verifier(req_token, pin).addCallbacks(got_access_token, d.errback)
-
-        def got_access_token(token):
-            self.notice("YAY!")
-            #TODO: check if token works, with check_credentials()
-            udata.oauth_token = token.key
-            udata.oauth_token_secret = token.secret
-            self.data.commit()
-            return token
-
-        doit()
-        return d
-
-    def get_oauth_token(self, udata):
-        token,secret = udata.oauth_token,udata.oauth_token_secret
-        if token is not None and secret is not None:
-            return success(oauth.OAuthToken(token, secret))
-
-        return self._get_oauth_token(udata)
-
-    def oauth_auth(self, args):
-        #FIXME: use Twitter screen_name, somehow, not user ID
-        id = args[0]
-        login = args[1]
-
-        udata = self.data.get_user(id, login)
-        if udata is None:
-            #FIXME: create user, if necessary
-            self.notice("No existing user data found")
-            return
-
-        self.notice("Setting up oauth authentication...")
-
-        def doit():
-            self.get_oauth_token(udata).addCallback(done, error)
-
-        def done(token):
-            self.notice('Got token: %s' % (token))
-
-        def error(e):
-            self.notice('ERROR getting oauth token')
-
-        doit()
-
-    def oauth_pin(self, args):
-        pin = args[0]
-        if self.oauth_pin_callback is None:
-            self.notice("Please use /OAUTH AUTH <id> <login> first")
-            return
-
-        self.notice("Thanks! Let's do it now...")
-        self.oauth_pin_callback(pin)
-
-    def irc_OAUTH(self, prefix, params):
-        cmd = params[0]
-        args = params[1:]
-        if cmd == 'auth':
-            self.oauth_auth(args)
-        elif cmd == 'pin':
-            self.oauth_pin(args)
 
 
     ### end of oauth code
@@ -1564,7 +1856,7 @@ class PasserdProtocol(IRC):
     def get_user(self, nick):
         #FIXME; index by nickname
         for u in self.users:
-            if nick == u.nick:
+            if nick.lower() == u.nick.lower():
                 return u
 
         # No Twitter user is available, if not authenticated yet
