@@ -106,7 +106,7 @@ OAUTH_AUTHORIZE_URL='http://twitter.com/oauth/authorize'
 
 OAUTH_SIGN_METHOD=oauth.OAuthSignatureMethod_HMAC_SHA1()
 
-oauth_consumer= oauth.OAuthConsumer(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET)
+oauth_consumer = oauth.OAuthConsumer(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET)
 
 
 def hooks(fn):
