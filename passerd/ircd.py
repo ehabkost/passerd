@@ -1269,7 +1269,6 @@ class PasserdProtocol(IRC):
         self.sendMessage('ERROR', ':Quit command received')
         self.transport.loseConnection()
 
-    @requires_auth
     def irc_WHO(self, p, args):
         for m in self.who_matches(args[0]):
             self.send_reply(irc.RPL_WHOREPLY, *m)
@@ -1299,7 +1298,6 @@ class PasserdProtocol(IRC):
             return
         target.modeRequest(self.the_user, args)
 
-    @requires_auth
     def irc_USERHOST(self, p, args):
         if len(args) > 5:
             args = args[:5]
@@ -1311,7 +1309,6 @@ class PasserdProtocol(IRC):
         if r:
             self.send_reply(irc.RPL_USERHOST, ':%s' % (' '.join(r)))
 
-    @requires_auth
     def irc_PRIVMSG(self, prefix, args):
         tname = args[0]
         msg = args[1]
