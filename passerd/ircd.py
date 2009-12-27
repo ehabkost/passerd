@@ -717,6 +717,8 @@ class TwitterChannel(IrcChannel):
     def userModeChar(self, u):
         if u == self.proto.the_user:
             return '@'
+        if u == self.proto.passerd_bot:
+            return '@'
         return ''
 
     def printEntry(self, entry):
@@ -878,7 +880,7 @@ class FriendlistMixIn:
             #FIXME: 1) show the_user only if it really has joined the channel
             #FIXME: 2) check if the_user is on the list used as input, and don't include it,
             #          to avoid duplicate entries on the list
-            users = [self.proto.the_user]+users
+            users = [self.proto.the_user, self.proto.passerd_bot]+users
             d.callback(users)
 
         doit()
