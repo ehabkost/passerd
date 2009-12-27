@@ -49,7 +49,7 @@ import oauth.oauth as oauth
 
 
 MYNAME = 'Passerd'
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 MYAGENT = '%s/%s' % (MYNAME, VERSION)
 #FIXME: use a real hostname?
 MYHOST = 'passerd.server'
