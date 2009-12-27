@@ -1437,10 +1437,19 @@ class PasserdProtocol(IRC):
     def send_text(self, sender, target, text):
         # security:
         text = full_entity_decode(text)
-        # security: remove invalid chars from text:
-        text = text.replace('\n', '').replace('\r', '')
         dbg('entities decoded: %r' % (text))
-        self.send_privmsg(sender, target, text.encode(ENCODING))
+        text = text.replace('\r', '\n')
+
+        first = True
+        # handle newlines as multiple messages
+        for line in text.split('\n'):
+            if not line:
+                continue
+            if not first:
+                #TODO: find a better way to indicate multi-line posts
+                line = '[...] '+line
+            self.send_privmsg(sender, target, line.encode(ENCODING))
+            first = False
 
     def connectionLost(self, reason):
         pinfo("connection to %s lost: %s", self.hostname, reason.value)
