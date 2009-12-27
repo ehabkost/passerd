@@ -735,17 +735,20 @@ class TwitterChannel(IrcChannel):
         self.proto.global_twuser_cache.got_api_user_info(u)
         self.printEntry(e)
 
-    def chan_notice(self, msg):
+    def bot_msg(self, msg):
         self.proto.send_privmsg(self.proto.passerd_bot, self, msg)
+
+    def bot_notice(self, msg):
+        self.proto.send_notice(self.proto.passerd_bot, self, msg)
 
     def refresh_error(self, e):
         dbg("#twitter refresh error")
         if e.check(twisted.web.error.Error):
             if e.value.status == 503:
-                self.chan_notice("Look! A flying whale!")
+                self.bot_notice("Look! A flying whale!")
                 return
 
-        self.chan_notice("error refreshing feed: %s" % (e.value))
+        self.bot_notice("error refreshing feed: %s" % (e.value))
 
     def start(self):
         for f in self.feeds:
@@ -778,7 +781,7 @@ class TwitterChannel(IrcChannel):
         def done(num_args):
             if num_args == 0:
                 #FIXME: we are sending notice as if it was from the user, here
-                self.chan_notice('people are quiet...')
+                self.bot_msg('people are quiet...')
 
         for f in self.feeds:
             doit(f)
@@ -794,7 +797,7 @@ class TwitterChannel(IrcChannel):
 
         if cmd == 'rate':
             api = self.proto.api
-            self.chan_notice('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
+            self.bot_msg('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
             return
 
     def messageReceived(self, sender, msg):
