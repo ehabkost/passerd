@@ -37,7 +37,9 @@ following features are available:
 Other available features:
 
 * You can send and receive Direct Messages as simple IRC private messages
-* You can follow public lists by joining any #@username/listname channel
+* You can follow public lists by joining any `#@username/listname` channel
+* You can see messages from individual users without following them on Twitter,
+  by joining any `#@username` channel
 
 
 ### Special commands
