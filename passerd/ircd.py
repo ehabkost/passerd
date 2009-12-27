@@ -259,6 +259,10 @@ class IrcUser(IrcTarget):
         """Must be called before self.nick value changes, so the sender ID is correct"""
         self.proto.send_message(self, 'NICK', new_nick)
 
+    def force_nick(self, new_nick):
+        if self.nick != new_nick:
+            self.notifyNickChange(new_nick)
+            self.nick = new_nick
 
 class IrcChannel(IrcTarget):
     supported_modes = SUPPORTED_CHAN_MODES
@@ -1418,8 +1422,13 @@ class PasserdProtocol(IRC):
 
     def irc_NICK(self, prefix, params):
         dbg("NICK %r" % (params))
-        self.the_user.nick = params[0]
-        self.got_nick = True
+        nick = params[0]
+        if self.got_nick:
+            self.the_user.force_nick(nick)
+        else:
+            self.the_user.nick = nick
+            self.got_nick = True
+            self.try_early_auth()
         self.try_early_auth()
 
     def irc_USER(self, prefix, params):
