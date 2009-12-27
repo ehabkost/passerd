@@ -1443,7 +1443,7 @@ class PasserdProtocol(IRC):
         self.send_privmsg(sender, target, text.encode(ENCODING))
 
     def connectionLost(self, reason):
-        pinfo("connection to %s lost: %s", self.hostname, reason)
+        pinfo("connection to %s lost: %s", self.hostname, reason.value)
         self.userQuit(str(reason))
         IRC.connectionLost(self, reason)
 
