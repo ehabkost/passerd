@@ -1652,7 +1652,7 @@ class PasserdProtocol(IRC):
 
         ok = []
         def doit():
-            self.notice("Checking your credentials using %s..." % (method))
+            self.notice("Checking Twitter credentials using %s..." % (method))
             api.verify_credentials(got_user).addCallback(done).addErrback(error)
 
         def got_user(u):
@@ -1703,7 +1703,7 @@ class PasserdProtocol(IRC):
         """
         api = self._twitter_api(username, password, base_url=BASE_URL) #, client_info=CLIENT_INFO)
         def doit():
-            return self.check_credentials(api, 'Password').addCallback(done)
+            return self.check_credentials(api, 'password').addCallback(done)
 
         def done(u):
             return (api, u)
@@ -1711,6 +1711,10 @@ class PasserdProtocol(IRC):
         return doit()
 
     def test_oauth_token(self, token):
+        """Check of the oauth token works
+
+        On success, pass a (token, api, auth_user) pair to the deferred callback
+        """
         api = self._twitter_api(consumer=oauth_consumer, token=token)
         def doit():
             return self.check_credentials(api, 'OAuth').addCallback(done)
