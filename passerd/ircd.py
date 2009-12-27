@@ -1570,6 +1570,10 @@ class PasserdProtocol(IRC):
             if nick == u.nick:
                 return u
 
+        # No Twitter user is available, if not authenticated yet
+        if not self.is_authenticated():
+            return None
+
         #TODO: use cache lookup_screen_name() method before returning UnknownTwitterUser()
 
         # if not found, consider it's a potential Twitter user we don't know yet
