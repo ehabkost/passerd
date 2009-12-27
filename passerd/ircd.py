@@ -744,7 +744,7 @@ class TwitterChannel(IrcChannel):
     def refresh_error(self, e):
         dbg("#twitter refresh error")
         if e.check(twisted.web.error.Error):
-            if e.value.status == 503:
+            if str(e.value.status) == '503':
                 self.bot_notice("Look! A flying whale!")
                 return
 
