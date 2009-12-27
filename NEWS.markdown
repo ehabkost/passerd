@@ -7,7 +7,7 @@
   Passerd (and you'll get a nice "from Passerd" note on your Twits.  :)
 * Optional nickserv-style authentication support
 * Better error messages (using a `passerd-bot` IRC user)
-* Now with a real (but still a bit ugly) web page: http://passerd.raisama.net/
+* Now with a real (but still a bit ugly) web page at [passerd.raisama.net](http://passerd.raisama.net/)
 
 
 ### Passerd 0.0.3
