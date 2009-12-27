@@ -488,16 +488,9 @@ class TwitterUserCache:
         return u
 
 
-class UnavailableTwitterData:
-    """Fake TwitterUserData object for unavailable info"""
-    def __init__(self, id):
-        self.twitter_id = id
 
-    twitter_screen_name = property(lambda self: 'user-id-%s' % (self.twitter_id))
-    twitter_name = property(lambda self: 'Twitter User (info not fetched yet)')
-
-
-class TwitterIrcUser:
+class TwitterIrcUser(IrcUser):
+    """Common class for multiple methods of contacting IRC users"""
     def _target_params(self, params):
         """Must return a dictionary containing user_id or screen_name, depending on
         how much information we already have about the user.
@@ -540,7 +533,16 @@ class TwitterIrcUser:
         doit()
 
 
-class CachedTwitterIrcUser(TwitterIrcUser, IrcUser):
+class UnavailableTwitterData:
+    """Fake TwitterUserData object for unavailable info"""
+    def __init__(self, id):
+        self.twitter_id = id
+
+    twitter_screen_name = property(lambda self: 'user-id-%s' % (self.twitter_id))
+    twitter_name = property(lambda self: 'Twitter User (info not fetched yet)')
+
+
+class CachedTwitterIrcUser(TwitterIrcUser):
     """An IrcUser object for cached Twitter user info
 
     Objects of this class may be short-lived, just to return info of a random
@@ -583,7 +585,7 @@ class CachedTwitterIrcUser(TwitterIrcUser, IrcUser):
     hostname = property(lambda self: 'twitter.com')
 
 
-class UnknownTwitterUser(TwitterIrcUser, IrcUser):
+class UnknownTwitterUser(TwitterIrcUser):
     """An IrcUser object for an user we don't know anything about, but may be a valid Twitter user"""
     def __init__(self, proto, nickname):
         self.proto = proto
