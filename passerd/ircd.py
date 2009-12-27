@@ -33,6 +33,7 @@ from twisted.internet.protocol import Factory
 from twisted.internet import reactor, defer
 from twisted.python import log
 from twisted.web import client as twclient
+import twisted.web.error
 
 
 from twittytwister.twitter import Twitter, TwitterClientInfo
@@ -739,6 +740,11 @@ class TwitterChannel(IrcChannel):
 
     def refresh_error(self, e):
         dbg("#twitter refresh error")
+        if e.check(twisted.web.error.Error):
+            if e.value.status == 503:
+                self.chan_notice("Look! A flying whale!")
+                return
+
         self.chan_notice("error refreshing feed: %s" % (e.value))
 
     def start(self):
