@@ -870,7 +870,7 @@ class TwitterChannel(IrcChannel):
             self.proto.dbg("Twitter update posted!!")
 
         def error(e):
-            self.bot_msg("%s: error while posting: %s" % (self.the_user.nick, e.value))
+            self.bot_msg("%s: error while posting: %s" % (self.proto.the_user.nick, e.value))
 
         doit()
 
