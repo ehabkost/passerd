@@ -1,3 +1,9 @@
+### Passerd 0.0.4.2 - 28 Dec 2009
+
+* Updated twitty-twister version. On 0.0.4, I forgot to update the
+  twitty-twister git commit reference, and broke twitter posting.
+
+
 ### Passerd 0.0.4.1 - 28 Dec 2009
 
 * Fix a problem on the OAuth access token request method. A POST
