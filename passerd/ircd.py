@@ -1288,7 +1288,7 @@ class UserSetupChannel(IrcChannel):
             bm("We will use the OAuth authentication method on Twitter,")
             bm("so you don't even need to give me your Twitter password.  :)")
             bm("Please tell me when you are ready, and we'll start the process")
-            bm("Are you ready?")
+            bm("Are you ready? (yes/no)")
             self.wait_for(r'^ *(y|yes|ok|start|restart) *$', start)
             self.wait_for(r'^ *n|no', lambda *a: bm("no problem..."))
 
@@ -1304,6 +1304,7 @@ class UserSetupChannel(IrcChannel):
 
         def error_get_token(e):
             bm("Error while trying to get an OAuth token: %s" % (e.value))
+            ask_restart()
 
         def show_progress(msg):
             bm("oauth progress: %s" % (msg))
@@ -1321,6 +1322,7 @@ class UserSetupChannel(IrcChannel):
 
         def pin_error(e):
             bm("The PIN didn't work. I got this error: %s" % (e.value))
+            ask_restart()
 
         def pin_worked(token):
             bm('The PIN worked!')
@@ -1330,6 +1332,7 @@ class UserSetupChannel(IrcChannel):
         def token_error(e):
             bm("The OAuth authentication didn't work. Sorry  :(")
             bm("Error message: %s" % (e.value))
+            ask_restart()
 
         def token_works(args):
             token,api,u = args
