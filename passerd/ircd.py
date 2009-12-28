@@ -1206,7 +1206,10 @@ class OAuthClient:
         def doit():
             req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
             req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
-            return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST', headers=req.to_header()).addCallback(done)
+            postdata = req.to_postdata()
+            headers = {"Content-Length": len(postdata)}
+            return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST',
+                    postdata=postdata, headers=headers).addCallback(done)
 
         def done(data):
             return oauth.OAuthToken.from_string(data)
