@@ -1278,7 +1278,7 @@ class UserSetupChannel(IrcChannel):
     def afterUserJoined(self, who):
         self.start_wizard()
 
-    def start_wizard(self):
+    def start_wizard(self, *args):
         def bm(msg):
             self.bot_message(msg)
 
