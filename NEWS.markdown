@@ -1,3 +1,11 @@
+### Passerd 0.0.4.1 - 28 Dec 2009
+
+* Fix a problem on the OAuth access token request method. A POST
+  request with no Content-Length may case a 411 Length Required
+  error (probably on some proxy servers).
+  * Thanks to Bogdano Arendartchuk for the fix.
+
+
 ### Passerd 0.0.4 - 27 Dec 2009
 
 * Ability to follow lists using `#@username/list` channels
