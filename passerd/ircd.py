@@ -1204,12 +1204,11 @@ class OAuthClient:
 
     def _send_verifier(self, req_token, verifier):
         def doit():
-            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
+            req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, http_method='POST', token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
             req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
             postdata = req.to_postdata()
-            headers = {"Content-Length": len(postdata)}
             return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST',
-                    postdata=postdata, headers=headers).addCallback(done)
+                    postdata=postdata).addCallback(done)
 
         def done(data):
             return oauth.OAuthToken.from_string(data)
