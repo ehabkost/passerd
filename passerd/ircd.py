@@ -1867,7 +1867,7 @@ class PasserdProtocol(IRC):
             if udata is None:
                 return no_oauth_setup()
             if not udata.oauth_token or not udata.oauth_token_secret:
-                return no_auth_setup()
+                return no_oauth_setup()
 
             got_user(udata)
 
