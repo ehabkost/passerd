@@ -1488,7 +1488,6 @@ class PasserdProtocol(IRC):
         self.dm_feed.start_refreshing()
 
     def welcome_anonymous(self):
-        self._send_welcome_replies()
         self.notice("Welcome, anonymous user!")
         self.notice("If you already have a Passerd account set up, identify yourself with the command: /MSG PASSERD-BOT LOGIN username password")
         self.notice("If your account is not set up yet, please join the #new-user-setup channel to set up your account")
