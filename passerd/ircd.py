@@ -1876,7 +1876,7 @@ class PasserdProtocol(IRC):
 
         def got_user(udata):
             token = oauth.OAuthToken(udata.oauth_token, udata.oauth_token_secret)
-            self.test_oauth_token(token).addCallback(oauth_works).addErrback(d.errback)
+            self.test_oauth_token(token).addCallbacks(oauth_works, oauth_error).addErrback(d.errback)
 
         def oauth_works(args):
             token,api,u = args
@@ -1885,6 +1885,14 @@ class PasserdProtocol(IRC):
             self.api = api
             self.set_authenticated_user(u)
             d.callback(u)
+
+        def oauth_error(e):
+            if e.check(twisted.web.error.Error):
+                if str(e.value.status) == '401':
+                    d.errback(MissingOAuthRegistration("OAuth token rejected by Twitter"))
+                    return
+
+            d.errback(e)
 
         doit()
         return d
@@ -1902,12 +1910,17 @@ class PasserdProtocol(IRC):
             self.welcome_user()
 
         def error(e):
-            self.send_reply(irc.ERR_PASSWDMISMATCH, ":Error while authenticating - %s" % (e.value))
-            self.notice("Your connection will be considered anonymous, by now")
-            self._send_welcome_replies()
-            self.welcome_anonymous()
             if e.check(MissingOAuthRegistration):
+                self.notice("Error while authenticating - %s" % (e.value))
+                self.notice("Your connection will be considered anonymous, by now")
+                self._send_welcome_replies()
+                self.welcome_anonymous()
                 self.redirect_to_new_user_setup()
+            else:
+                self.send_reply(irc.ERR_PASSWDMISMATCH, ":Error while authenticating - %s" % (e.value))
+                # on the other cases, drop the connection
+                self.transport.loseConnection()
+
 
         doit()
 
