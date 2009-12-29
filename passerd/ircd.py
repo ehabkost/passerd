@@ -25,6 +25,7 @@
 # THE SOFTWARE.
 
 import sys, logging, time, re, random
+import gc
 import optparse
 
 from twisted.words.protocols import irc
@@ -1147,6 +1148,12 @@ class PasserdBot(IrcUser):
                 self.proto.redirect_to_new_user_setup()
 
         doit()
+
+    def command_gc(self, who, parts):
+        self.proto.send_notice(self, who, "Object counts: %r" % (gc.get_count(),))
+        r = gc.collect()
+        self.proto.send_notice(self, who, "Garbage collection run. %d objects freed" % (r))
+        self.proto.send_notice(self, who, "New object counts: %r" % (gc.get_count(),))
 
     def messageReceived(self, who, msg):
         parts = msg.split(' ',1)
