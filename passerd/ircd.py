@@ -1214,6 +1214,7 @@ class OAuthClient:
             req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, http_method='POST', token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
             req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
             postdata = req.to_postdata()
+            dbg("url: %r. postdata: %r. token: %s", OAUTH_ACCESS_TOKEN_URL, postdata, req_token)
             return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST',
                     postdata=postdata).addCallback(done)
 
@@ -1325,6 +1326,7 @@ class UserSetupChannel(IrcChannel):
         def got_pin(consumer, m):
             pin = m.group(0)
             bm("Got it. Thanks!")
+            bm("PIN: %r" % (pin))
             consumer.got_verifier(pin).addCallback(pin_worked).addErrback(pin_error)
 
         def pin_error(e):
