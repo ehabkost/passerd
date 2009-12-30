@@ -1,5 +1,5 @@
-Passerd
-=======
+Passerd - A Twitter-IRC gateway
+===============================
 
 What is _Passerd_?
 ------------------
