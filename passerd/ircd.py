@@ -95,8 +95,10 @@ ERR_NEEDREGGEDNICK = '477'
 
 # logging helpers:
 logger = logging.getLogger("passerd")
+oauth_logger = logging.getLogger('passerd.oauth')
 
 dbg = logger.debug
+odbg = oauth_logger.debug
 pinfo = logger.info
 perror = logger.error
 
@@ -1216,7 +1218,7 @@ class OAuthClient:
             req = oauth.OAuthRequest.from_consumer_and_token(oauth_consumer, http_method='POST', token=req_token, verifier=verifier, http_url=OAUTH_ACCESS_TOKEN_URL)
             req.sign_request(OAUTH_SIGN_METHOD, oauth_consumer, req_token)
             postdata = req.to_postdata()
-            dbg("url: %r. postdata: %r. token: %s", OAUTH_ACCESS_TOKEN_URL, postdata, req_token)
+            odbg("access token url: %r. postdata: %r. token: %s", OAUTH_ACCESS_TOKEN_URL, postdata, req_token)
             return twclient.getPage(OAUTH_ACCESS_TOKEN_URL, method='POST',
                     postdata=postdata).addCallback(done)
 
