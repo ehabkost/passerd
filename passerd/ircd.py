@@ -2089,9 +2089,13 @@ class PasserdGlobalOptions:
 
         #logging:
         self.logstream = sys.stderr
-        self.loglevel = logging.INFO
-        # sqlalchemy is too verbose on the INFO loglevel
-        self.dbloglevel = logging.ERROR
+
+        # list of (logger_name, level) pairs
+        # - sqlalchemy is too verbose on the INFO loglevel
+        # - enable oauth debugging, by now
+        self.loglevels = [(None,         logging.INFO),
+                          ('sqlalchemy', logging.ERROR),
+                          ('passerd.oauth',logging.DEBUG)]
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -2102,16 +2106,15 @@ def parse_cmdline(args, opts):
             parser.error("invalid listen address, expected HOST:PORT")
         opts.listen = (host, port)
 
-    def set_loglevels(level, dblevel):
-        opts.loglevel = level
-        opts.dbloglevel = dblevel
+    def set_loglevels(levels):
+        opts.loglevels = levels
 
     parser = optparse.OptionParser("%prog [options] <database path>")
     parser.add_option("-l", "--listen", type="string",
             action="callback", callback=parse_hostport,
             metavar="HOST:PORT", help="listen address")
     parser.add_option("-D", "--debug",
-            action="callback", callback=lambda *args: set_loglevels(logging.DEBUG, logging.DEBUG),
+            action="callback", callback=lambda *args: set_loglevels([(None,logging.DEBUG)]),
             help="Enable debug logging")
     _, args = parser.parse_args(args)
     if not args:
@@ -2128,10 +2131,9 @@ def setup_logging(opts):
     # root logger:
     r = logging.getLogger()
     r.addHandler(ch)
-    r.setLevel(opts.loglevel)
 
-    #sqlalchemy logging:
-    l = logging.getLogger('sqlalchemy').setLevel(opts.dbloglevel)
+    for name,level in opts.loglevels:
+        logging.getLogger(name).setLevel(level)
 
 
 def run():
