@@ -1396,7 +1396,7 @@ class UserSetupChannel(IrcChannel):
             bm("Alternatively, I can generate a random password for you, just type 'generate' and I will do it")
             bm("What will be your password?")
             self.wait_for('.+', got_password)
-            self.wait_for('generate', gen_password)
+            self.wait_for('^ *generate *$', gen_password)
 
         def got_password(msg,m):
             pw = msg
