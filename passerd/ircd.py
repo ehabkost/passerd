@@ -743,6 +743,8 @@ class TwitterChannel(IrcChannel):
         self.proto.send_text(u, self, text)
 
     def _drop_one_old_entry(self):
+        #FIXME: Claudio reported a memory leak, I think it's here.
+
         # remove from two lists:
         # - recent_posts
         # - last_post_by_user
