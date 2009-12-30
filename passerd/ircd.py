@@ -1340,7 +1340,7 @@ class UserSetupChannel(IrcChannel):
             bm("Now, go to: %s" % (url))
             bm("After authorizing Passerd to access your account, you'll get a PIN")
             bm("Please paste the PIN here")
-            self.wait_for('[0-9]+', lambda msg,m: got_pin(consumer, m))
+            self.wait_for('[0-9][0-9][0-9]+', lambda msg,m: got_pin(consumer, m))
 
         def got_pin(consumer, m):
             pin = m.group(0)
