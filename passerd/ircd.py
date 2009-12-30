@@ -800,6 +800,21 @@ class TwitterChannel(IrcChannel):
                 return
 
         self.bot_notice("error refreshing feed: %s" % (e.value))
+        remaining = self.proto.api.rate_limit_remaining
+        # note that it will not wait when remaining is None, which is
+        # intended
+        if e.value.status == '400' and remaining == 0:
+            self.wait_rate_limit()
+
+    def wait_rate_limit(self):
+        reset = time.ctime(self.proto.api.rate_limit_reset)
+        self.bot_msg('Ouch, the limit of requests per hour has been '
+                'reached. I will wait until %s to start checking the '
+                'Twitter timeline again.' % (reset))
+        self.bot_msg('You still can force the check by sending `!`. Also '
+                'you can check the rate limit by sending `!rate`.')
+        for feed in self.feeds:
+            feed.wait_rate_limit()
 
     def start(self):
         for f in self.feeds:

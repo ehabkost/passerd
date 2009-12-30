@@ -26,6 +26,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import time
 import logging
 
 from twisted.internet import reactor, defer
@@ -85,9 +86,9 @@ class TwitterFeed:
                 self.next_refresh.cancel()
             self.next_refresh = None
 
-    def refresh_resched(self):
+    def refresh_resched(self, delay=REFRESH_DELAY):
         self.cancel_next_refresh()
-        self.next_refresh = reactor.callLater(REFRESH_DELAY, self.refresh)
+        self.next_refresh = reactor.callLater(delay, self.refresh)
 
     def _refresh(self, last_id=None):
         if last_id is None:
@@ -106,8 +107,8 @@ class TwitterFeed:
 
         def error(*args):
             dbg("_refresh error %r" % (args,))
-            self.errbacks.callback(*args)
             d.errback(*args)
+            self.errbacks.callback(*args)
 
         # store the entries and then show them in chronological order:
         def got_entry(e):
@@ -151,6 +152,17 @@ class TwitterFeed:
                 self.refresh_resched()
 
         return doit()
+
+    def wait_rate_limit(self):
+        delay = int(self.api.rate_limit_reset - time.time())
+        reset = time.ctime(self.api.rate_limit_reset)
+        if delay > REFRESH_DELAY:
+            dbg("Rescheduling the next feed refresh to %s (%s seconds),"
+                " as the rate limit was exhausted." % (reset, delay))
+            self.refresh_resched(delay)
+        else:
+            dbg("No need to resched to wait for rate-limit, as the "
+                "delay is only %s seconds" % (delay))
 
     def stop_refreshing(self):
         self.continue_refreshing = False
