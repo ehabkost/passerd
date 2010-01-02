@@ -798,13 +798,13 @@ class TwitterChannel(IrcChannel):
             if str(e.value.status) == '503':
                 self.bot_notice("Look! A flying whale! -- %s" % (e.value))
                 return
+            remaining = self.proto.api.rate_limit_remaining
+            # note that it will not wait when remaining is None, which is
+            # intended
+            if e.value.status == '400' and remaining == 0:
+                self.wait_rate_limit()
 
         self.bot_notice("error refreshing feed: %s" % (e.value))
-        remaining = self.proto.api.rate_limit_remaining
-        # note that it will not wait when remaining is None, which is
-        # intended
-        if e.value.status == '400' and remaining == 0:
-            self.wait_rate_limit()
 
     def wait_rate_limit(self):
         reset = time.ctime(self.proto.api.rate_limit_reset)
