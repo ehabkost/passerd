@@ -5,8 +5,8 @@ class Dialog:
     """
     def __init__(self, *args, **kwargs):
         self.patterns = []
-        self.dialog_init(*args, **kwargs)
         self.message_func = None
+        self.dialog_init(*args, **kwargs)
 
     def set_message_func(self, fn):
         self.message_func = fn
@@ -48,19 +48,111 @@ class Dialog:
 
 class CommandDialog(Dialog):
     """A dialog for simple 'command args' commands"""
+    def __init__(self, *args, **kwargs):
+        self.subdialogs = []
+        self.commands = {}
+        self.cmd_prefix = ''
+        Dialog.__init__(self, *args, **kwargs)
+        self.add_alias('?', 'help')
+
+    def _set_subdialog_prefix(self, cmd, dialog):
+        dialog.set_cmd_prefix('%s%s ' % (self.cmd_prefix, cmd.upper()))
+
+    def set_cmd_prefix(self, prefix):
+        """Set prefix for command examples on help messages
+
+        Useful for the "!command" format or for subdialogs
+        """
+        self.cmd_prefix = prefix
+        for cmd,sd in self.subdialogs:
+            self._set_subdialog_prefix(cmd, sd)
+
     def unknown_command(self, cmd, args):
         #TODO: show help
-        self.message("Sorry, I don't get it.")
+        self.message("Sorry, I don't get it. Type '%sHELP' for available commands" % (self.cmd_prefix))
 
-    def recv_message(self, msg):
-        parts = msg.split(' ',1)
+    def add_command(self, cmd, fn):
+        self.commands[cmd.lower()] = fn
+
+    def add_alias(self, alias, cmd):
+        self.add_command(alias, self._command_fn(cmd))
+
+    def _command_fn(self, cmd):
+        fn = getattr(self, 'command_%s' % (cmd.lower()), None)
+        if fn is None:
+            fn = self.commands.get(cmd.lower())
+        return fn
+
+    def add_subdialog(self, cmd, dialog, short_help):
+        def doit():
+            self.subdialogs.append( (cmd, dialog) )
+
+            dialog.set_message_func(self.message)
+            self._set_subdialog_prefix(cmd, dialog)
+            self.add_command(cmd, handle_cmd)
+            setattr(self, 'help_%s' % (cmd), show_help)
+            setattr(self, 'shorthelp_%s' % (cmd), short_help)
+
+        def show_help(args):
+            dialog.show_help('%s: ' % (cmd.upper()), args)
+
+        def handle_cmd(args):
+            if not args:
+                args = ''
+            dialog.recv_message(args)
+
+        doit()
+
+    def split_args(self, s):
+        s = s.lstrip()
+        parts = s.split(' ',1)
         cmd = parts[0]
-        cmd = cmd.lower()
         if len(parts) > 1:
             args = parts[1]
         else:
             args = None
-        fn = getattr(self, 'command_%s' % (cmd), None)
+        return cmd,args
+
+    def _short_help(self, cmd):
+        sh = getattr(self, 'shorthelp_%s' % (cmd.lower()), None)
+        if sh:
+            return '%s - %s' % (cmd.upper(), sh)
+        else:
+            return None
+
+    def _long_help(self, cmd, args):
+        fn = getattr(self, 'help_%s' % (cmd.lower()), None)
+        if fn:
+            return fn(args)
+        sh = self._short_help(cmd)
+        if sh:
+            self.message(sh)
+            return
+        self.message("Unknown help topic: %s" % (cmd))
+
+    def show_help(self, prefix, args):
+        if args:
+            cmd,rest = self.split_args(args)
+            return self._long_help(cmd, rest)
+
+        topics = []
+        for a in dir(self):
+            if a.startswith('shorthelp_'):
+                _,t = a.split('_',1)
+                topics.append(t)
+        topics.sort()
+        self.message('%sAvailable topics/commands:' % (prefix))
+        for t in topics:
+            self.message(self._short_help(t))
+        self.message("Use '%sHELP topic' to get more info on a topic" % (self.cmd_prefix))
+
+    shorthelp_help = 'Show help'
+    def command_help(self, args):
+        return self.show_help('', args)
+
+    def recv_message(self, msg):
+        cmd,args = self.split_args(msg)
+        fn = self._command_fn(cmd)
         if fn is None:
             return self.unknown_command(cmd, args)
         return fn(args)

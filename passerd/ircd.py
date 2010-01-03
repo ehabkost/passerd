@@ -453,6 +453,7 @@ class TwitterChannel(IrcChannel):
 
         self.cmd_dialog = PasserdCommands(proto)
         self.cmd_dialog.set_message_func(self.bot_msg)
+        self.cmd_dialog.set_cmd_prefix('!')
 
     def _createFeeds(self):
         raise NotImplementedError("_createFeeds not implemented on %s" % (self.name))
@@ -854,21 +855,35 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return self.proto.twitter_users.fetch_friend_info(self.user, users)
 
 
-class PasserdCommands(CommandDialog):
+class ProtoDialog:
+    """A simple mixin to set a 'proto' attribute on dialog_init()"""
     def dialog_init(self, proto):
         self.proto = proto
 
-    def login_syntax(self):
+
+class ConfigCommands(ProtoDialog, CommandDialog):
+    shorthelp_set = 'Change a config option'
+    def command_set(self, args):
+        self.message('set works')
+
+
+class PasserdCommands(CommandDialog):
+    def dialog_init(self, proto):
+        self.proto = proto
+        self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
+
+    shorthelp_login = 'Log into Passerd/Twitter'
+    def help_login(self, args):
         self.message("Syntax: LOGIN twitter-login password")
         self.message("If you don't have an account yet, join the #new-user-setup channel")
 
     def command_login(self, args):
         if not args:
-            return self.login_syntax()
+            return self.help_login(None)
 
         parts = args.split(' ', 1)
         if len(parts) <> 2:
-            return self.login_syntax()
+            return self.help_login(None)
 
         login,password = parts
 
@@ -886,14 +901,19 @@ class PasserdCommands(CommandDialog):
 
         doit()
 
+    shorthelp_gc = 'Run Python garbage collection (debugging/testing command)'
     def command_gc(self, args):
         self.message("Object counts: %r" % (gc.get_count(),))
         r = gc.collect()
         self.message("Garbage collection run. %d objects freed" % (r))
         self.message("New object counts: %r" % (gc.get_count(),))
 
+    shorthelp_rate = 'Show Twitter API rate-limit info'
     def command_rate(self, args):
         api = self.proto.api
+        if api is None:
+            self.message('You are not logged in. No rate limit info is available')
+            return
         self.message('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
 
 
@@ -912,10 +932,7 @@ class PasserdBot(IrcUser):
     hostname = MYHOST
 
 
-class NewUserDialog(Dialog):
-    def dialog_init(self, proto):
-        self.proto = proto
-
+class NewUserDialog(ProtoDialog, Dialog):
     def begin(self, *args):
         def bm(msg):
             self.message(msg)
