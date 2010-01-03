@@ -56,7 +56,10 @@ class CommandDialog(Dialog):
         parts = msg.split(' ',1)
         cmd = parts[0]
         cmd = cmd.lower()
-        args = parts[1:]
+        if len(parts) > 1:
+            args = parts[1]
+        else:
+            args = None
         fn = getattr(self, 'command_%s' % (cmd), None)
         if fn is None:
             return self.unknown_command(cmd, args)

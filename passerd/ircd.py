@@ -862,11 +862,11 @@ class PasserdCommands(CommandDialog):
         self.message("Syntax: LOGIN twitter-login password")
         self.message("If you don't have an account yet, join the #new-user-setup channel")
 
-    def command_login(self, parts):
-        if len(parts) <> 1:
+    def command_login(self, args):
+        if not args:
             return self.login_syntax()
 
-        parts = parts[0].split(' ', 1)
+        parts = args.split(' ', 1)
         if len(parts) <> 2:
             return self.login_syntax()
 
