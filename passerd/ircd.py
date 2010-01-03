@@ -44,6 +44,7 @@ from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
 from passerd.dialogs import Dialog, attach_dialog_to_channel
+from passerd.util import try_unicode, hooks, to_str
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
@@ -66,7 +67,6 @@ BASE_URL = 'https://twitter.com'
 
 
 ENCODING = 'utf-8'
-FALLBACK_ENCODING = 'iso-8859-1'
 
 TWITTER_ENCODING = 'utf-8'
 
@@ -116,40 +116,6 @@ OAUTH_AUTHORIZE_URL='http://twitter.com/oauth/authorize'
 OAUTH_SIGN_METHOD=oauth.OAuthSignatureMethod_HMAC_SHA1()
 
 oauth_consumer = oauth.OAuthConsumer(OAUTH_CONSUMER_KEY, OAUTH_CONSUMER_SECRET)
-
-
-def hooks(fn):
-    """Decorator that call beforeFoo() and afterFoo() methods if available"""
-    name = fn.func_name
-    upname = name[0].upper()+name[1:]
-    before = 'before%s' % (upname)
-    after = 'after%s' % (upname)
-    def call_with_hooks(self, *args, **kwargs):
-        if hasattr(self, before):
-            getattr(self, before)(*args, **kwargs)
-        r = fn(self, *args, **kwargs)
-        if hasattr(self, after):
-            getattr(self, after)(*args, **kwargs)
-        return r
-    return call_with_hooks
-
-def try_unicode(s):
-    for e in (ENCODING, FALLBACK_ENCODING):
-        try:
-            return unicode(s, e)
-        except:
-            pass
-
-    # no success:
-    raise Exception("couldn't decode message as unicode")
-
-def to_str(s):
-    if isinstance(s, unicode):
-        return s.encode(ENCODING)
-    elif isinstance(s, str):
-        return s
-    else:
-        raise Exception("%r is not str (type: %r)" % (s, type(s)))
 
 
 class ErrorReply(Exception):
@@ -536,7 +502,7 @@ class TwitterIrcUser(IrcUser):
     def messageReceived(self, sender, msg):
         assert (sender is self.proto.the_user)
 
-        msg = try_unicode(msg)
+        msg = try_unicode(msg, ENCODING)
         if len(msg) > LENGTH_LIMIT:
             #TODO: maybe there's a better error code for this?
             self.proto.send_reply(irc.RPL_AWAY, self.nick, ':message too long (%d characters), not sent.' % (len(msg)))
@@ -888,7 +854,7 @@ class TwitterChannel(IrcChannel):
         self.sendTwitterUpdate('/me %s' % (arg))
 
     def _sendTwitterUpdate(self, msg, args):
-        msg = try_unicode(msg)
+        msg = try_unicode(msg, ENCODING)
         if len(msg) > LENGTH_LIMIT:
             self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
             return
@@ -1632,10 +1598,10 @@ class PasserdProtocol(IRC):
         self.send_notice(self.my_irc_server, target, msg)
 
     def send_notice(self, sender, target, msg):
-        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg)))
+        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg, ENCODING)))
 
     def send_privmsg(self, sender, target, msg):
-        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg)))
+        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg, ENCODING)))
 
     def notice(self, msg):
         self.server_notice(self.the_user, msg)
