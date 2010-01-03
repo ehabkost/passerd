@@ -41,7 +41,7 @@ from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
-from passerd.dialogs import Dialog, attach_dialog_to_channel
+from passerd.dialogs import Dialog, CommandDialog, attach_dialog_to_channel, attach_dialog_to_bot
 from passerd.util import try_unicode, to_str
 from passerd.irc import IrcUser, IrcChannel, IrcServer
 from passerd.poauth import OAuthClient, oauth_consumer
@@ -854,23 +854,17 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return self.proto.twitter_users.fetch_friend_info(self.user, users)
 
 
-class PasserdBot(IrcUser):
-    """The Passerd IRC bot, that is used for Passerd messages on the channel"""
-    def __init__(self, proto, nick):
+class PasserdCommands(CommandDialog):
+    def dialog_init(self, proto):
         self.proto = proto
-        self.nick = nick
 
-    real_name = 'Passerd Bot'
-    username = 'passerd'
-    hostname = MYHOST
+    def login_syntax(self):
+        self.message("Syntax: LOGIN twitter-login password")
+        self.message("If you don't have an account yet, join the #new-user-setup channel")
 
-    def login_syntax(self, who):
-        self.proto.send_notice(self, who, "Syntax: LOGIN twitter-login password")
-        self.proto.send_notice(self, who, "If you don't have an account yet, join the #new-user-setup channel")
-
-    def command_login(self, who, parts):
+    def command_login(self, parts):
         if len(parts) <> 1:
-            return self.login_syntax(who)
+            return self.login_syntax()
 
         parts = parts[0].split(' ', 1)
         if len(parts) <> 2:
@@ -882,33 +876,36 @@ class PasserdBot(IrcUser):
             self.proto._do_auth(login, password).addCallback(done).addErrback(error)
 
         def done(u):
-            self.proto.send_notice(self, who, "Welcome to Passerd, %s" % (u.screen_name))
+            self.message("Welcome to Passerd, %s" % (u.screen_name))
             self.proto.welcome_user()
 
         def error(e):
-            self.proto.send_notice(self, who, "Error while authenticating: %s" % (e.value))
+            self.message("Error while authenticating: %s" % (e.value))
             if e.check(MissingOAuthRegistration):
                 self.proto.redirect_to_new_user_setup()
 
         doit()
 
-    def command_gc(self, who, parts):
-        self.proto.send_notice(self, who, "Object counts: %r" % (gc.get_count(),))
+    def command_gc(self, args):
+        self.message("Object counts: %r" % (gc.get_count(),))
         r = gc.collect()
-        self.proto.send_notice(self, who, "Garbage collection run. %d objects freed" % (r))
-        self.proto.send_notice(self, who, "New object counts: %r" % (gc.get_count(),))
+        self.message("Garbage collection run. %d objects freed" % (r))
+        self.message("New object counts: %r" % (gc.get_count(),))
 
-    def messageReceived(self, who, msg):
-        parts = msg.split(' ',1)
-        cmd = parts[0]
-        cmd = cmd.lower()
-        fn = getattr(self, 'command_%s' % (cmd), None)
-        if fn is None:
-            #TODO: add help message
-            self.proto.send_notice(self, who, "Sorry, I don't get it.")
-            return
 
-        return fn(who, parts[1:])
+class PasserdBot(IrcUser):
+    """The Passerd IRC bot, that is used for Passerd messages on the channel"""
+    def __init__(self, proto, nick):
+        IrcUser.__init__(self, proto)
+        self.proto = proto
+        self.nick = nick
+
+        self.dialog = d = PasserdCommands(proto)
+        attach_dialog_to_bot(d, proto, proto.the_user, self)
+
+    real_name = 'Passerd Bot'
+    username = 'passerd'
+    hostname = MYHOST
 
 
 class NewUserDialog(Dialog):
@@ -1094,7 +1091,7 @@ class PasserdProtocol(IRC):
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
 
 
-        self.my_irc_server = IrcServer(self.myhost)
+        self.my_irc_server = IrcServer(self, self.myhost)
 
         u = self.the_user = IrcUser(self)
         u.nick = 'guest'

@@ -44,6 +44,17 @@ class IrcTarget:
     This may contain some common operations that work for both users and
     channels.
     """
+    def __init__(self, proto):
+        self.proto = proto
+        self.msg_notifiers  = []
+
+    def add_msg_notifier(self, func):
+        self.msg_notifiers.append(func)
+
+    def notify_message(self, sender, msg):
+        for func in self.msg_notifiers:
+            func(self, sender, msg)
+
     def parseModeSetRequest(self, args):
         """Parse a mode-change request, generating (flags,params) tuples
 
@@ -114,12 +125,13 @@ class IrcTarget:
             else:
                 self.ctcp_unknown(tag, data)
 
+    def messageReceived(self, sender, msg):
+        assert (sender is self.proto.the_user)
+        self.notify_message(sender, msg)
+
 
 class IrcUser(IrcTarget):
     supported_modes = ''
-
-    def __init__(self, proto):
-        self.proto = proto
 
     def __cmp__(self, o):
         return cmp(self.nick, o.nick)
@@ -140,9 +152,6 @@ class IrcUser(IrcTarget):
     def full_id(self):
         return '%s!%s@%s' % (self.nick, self.username, self.hostname)
 
-    def messageReceived(self, sender, msg):
-        raise NotImplementedError("private messages aren't supported yet!")
-
     def notifyNickChange(self, new_nick):
         """Must be called before self.nick value changes, so the sender ID is correct"""
         self.proto.send_message(self, 'NICK', new_nick)
@@ -156,16 +165,8 @@ class IrcChannel(IrcTarget):
     supported_modes = 'b'
 
     def __init__(self, proto, name):
+        IrcTarget.__init__(self, proto)
         self.name = name
-        self.proto = proto
-        self.msg_notifiers  = []
-
-    def add_msg_notifier(self, func):
-        self.msg_notifiers.append(func)
-
-    def notify_message(self, sender, msg):
-        for func in self.msg_notifiers:
-            func(self, sender, msg)
 
     def target_name(self):
         return self.name
@@ -265,10 +266,6 @@ class IrcChannel(IrcTarget):
     def userQuit(self, user, reason):
         pass
 
-    def messageReceived(self, sender, msg):
-        assert (sender is self.proto.the_user)
-        self.notify_message(sender, msg)
-
     def topic(self):
         return "[no topic set]"
 
@@ -285,7 +282,8 @@ class IrcChannel(IrcTarget):
 
 class IrcServer(IrcTarget):
     """An IrcTarget used for server messages"""
-    def __init__(self, name):
+    def __init__(self, proto, name):
+        IrcTarget.__init__(self, proto)
         self.name = name
 
     def full_id(self):
