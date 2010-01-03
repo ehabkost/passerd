@@ -44,12 +44,16 @@ from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
 from passerd.dialogs import Dialog, attach_dialog_to_channel
-from passerd.util import try_unicode, hooks, to_str
+from passerd.util import try_unicode, to_str
+from passerd.irc import IrcUser, IrcChannel, IrcServer
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
 import oauth.oauth as oauth
 
+
+# client/user-agent info:
+####
 
 MYNAME = 'Passerd'
 VERSION = '0.0.4'
@@ -59,16 +63,29 @@ MYHOST = 'passerd.server'
 MYURL = 'http://passerd.raisama.net/'
 CLIENT_INFO = TwitterClientInfo(MYNAME, VERSION, MYURL)
 
-SUPPORTED_USER_MODES = '0'
+
+# IRC protocol stuff:
+####
+
+# the only mode supported, right now:
 SUPPORTED_CHAN_MODES = 'b'
+# No user mode is supported, by now:
+SUPPORTED_USER_MODES = '0'
+IRC_ENCODING = 'utf-8'
+
+
+# Twitter protocol stuff:
+####
 
 BASE_URL = 'https://twitter.com'
-
-
-
-ENCODING = 'utf-8'
-
 TWITTER_ENCODING = 'utf-8'
+LENGTH_LIMIT = 140
+
+
+
+
+# Some limits:
+####
 
 
 # keep latest 100 post on each channel, to create in_reply_to field.
@@ -83,11 +100,11 @@ MAX_USER_INFO_FETCH = 0  # individual fetch is not implemented yet...
 MAX_FRIEND_PAGE_REQS = 10
 
 
-LENGTH_LIMIT = 140
 
 
 
 # IRC protocol constants:
+####
 
 # Other error codes we may use:
 ERR_NEEDREGGEDNICK = '477'
@@ -95,6 +112,8 @@ ERR_NEEDREGGEDNICK = '477'
 
 
 # logging helpers:
+####
+
 logger = logging.getLogger("passerd")
 oauth_logger = logging.getLogger('passerd.oauth')
 
@@ -106,6 +125,8 @@ perror = logger.error
 
 
 # OAuth stuff:
+####
+
 OAUTH_CONSUMER_KEY='1K2bNGyqs7dtDKTaTlfnQ'
 OAUTH_CONSUMER_SECRET='frpQHgjN21ajybwA0ZQ2utwlu9O6A36r8YLy6PxY5c'
 
@@ -126,261 +147,6 @@ class ErrorReply(Exception):
 
 class MissingOAuthRegistration(Exception):
     pass
-
-
-class IrcTarget:
-    """Common class for IRC channels and users
-
-    This may contain some common operations that work for both users and
-    channels.
-    """
-    def parseModeSetRequest(self, args):
-        """Parse a mode-change request, generating (flags,params) tuples
-
-        Whoever invented the MODE command syntax is _really_ evil.
-        """
-        i = 0
-        dbg("parsing mode request: %r" % (args))
-        while i < len(args):
-            flags = args[i]
-            i += 1
-            params = []
-            while i < len(args):
-                a = args[i]
-                if a[:1] in '+-':
-                    # a new flag set/unset was requested
-                    break
-                params.append(a)
-                i += 1
-            dbg("flags: %r, params: %r" % (flags, params))
-            yield flags,params
-
-    def modeFlagQuery(self, flag, params):
-        dbg("mode flag query: %r %r" % (flag, params))
-        # specific mode query/set request:
-        if not flag in self.supported_modes:
-            self.proto.send_reply(irc.ERR_UNKNOWNMODE, 'Mode %s is not known to me' % (flag))
-            return
-        fn = getattr(self, 'mode_query_%s' % (flag))
-        fn(params)
-
-    def flagChangeRequest(self, flag, value, params):
-        dbg("mode change request: %r %s %r" % (flag, value, params))
-        if not flag in self.supported_modes:
-            self.proto.send_reply(irc.ERR_UNKNOWNMODE, flag, ':Mode %s is not known to me' % (flag))
-            return
-        fn = getattr(self, 'mode_set_%s' % (flag))
-        fn(value, params)
-
-    def modeFlagRequest(self, sender, args):
-        for flags,params in self.parseModeSetRequest(args):
-            value = 0
-            for f in flags:
-                if f == '+': value = 1
-                elif f == '-': value = -1
-                else:
-                    if value == 0:
-                        # no "+" or "-" => simple query
-                        self.modeFlagQuery(f, params)
-                    else:
-                        self.flagChangeRequest(f, value, params)
-
-
-    def modeRequest(self, sender, args):
-        if len(args) == 1:
-            # general mode query
-            self.sendModes()
-        else:
-            self.modeFlagRequest(self, args[1:])
-
-    def ctcp_unknown(self, tag, data):
-        dbg("Unsupported CTCP query: %r %r" % (tag, data))
-
-    def ctcpQueryReceived(self, sender, query):
-        for tag,data in query:
-            m = getattr(self, 'ctcp_%s' % (tag), None)
-            if m is not None:
-                m(data)
-            else:
-                self.ctcp_unknown(tag, data)
-
-
-class IrcUser(IrcTarget):
-    supported_modes = SUPPORTED_USER_MODES
-
-    def __init__(self, proto):
-        self.proto = proto
-
-    def __cmp__(self, o):
-        return cmp(self.nick, o.nick)
-
-    def target_name(self):
-        return self.nick
-
-    def is_away(self):
-        return False
-
-    def away_char(self):
-        if self.is_away(): return '-'
-        else: return '+'
-
-    def userhost(self):
-        return '%s@%s' % (self.username, self.hostname)
-
-    def full_id(self):
-        return '%s!%s@%s' % (self.nick, self.username, self.hostname)
-
-    def messageReceived(self, sender, msg):
-        raise NotImplementedError("private messages aren't supported yet!")
-
-    def notifyNickChange(self, new_nick):
-        """Must be called before self.nick value changes, so the sender ID is correct"""
-        self.proto.send_message(self, 'NICK', new_nick)
-
-    def force_nick(self, new_nick):
-        if self.nick != new_nick:
-            self.notifyNickChange(new_nick)
-            self.nick = new_nick
-
-class IrcChannel(IrcTarget):
-    supported_modes = SUPPORTED_CHAN_MODES
-
-    def __init__(self, proto, name):
-        self.name = name
-        self.proto = proto
-        self.msg_notifiers  = []
-
-    def add_msg_notifier(self, func):
-        self.msg_notifiers.append(func)
-
-    def notify_message(self, sender, msg):
-        for func in self.msg_notifiers:
-            func(self, sender, msg)
-
-    def target_name(self):
-        return self.name
-
-    def ban_masks(self, params):
-        return []
-
-    def list_members(self):
-        #FIXME: include the_user only if the user already joined
-        return [self.proto.the_user]
-
-    def mode_query_b(self, params):
-        """Query ban list"""
-        dbg("checking the ban list for %s" % (self.name))
-        for m in self.ban_masks(params):
-            self.proto.send_reply(irc.RPL_BANLIST, self.name, m)
-        self.proto.send_reply(irc.RPL_ENDOFBANLIST, self.name, ":End of channel ban list")
-
-    def mode_set_b(self, value, params):
-        dbg("ban mode set request: %r %r" % (value, params))
-        if len(params) == 0:
-            # no params means this is a mode query
-            return self.mode_query_b(params)
-
-        raise NotImplementedError("Ban setting is not implemented")
-
-    def send_message(self, sender, msg):
-        self.proto.send_privmsg(sender, self, msg)
-
-    def typeChar(self):
-        """Return '@', '*', or '=', for RPL_NAMREPLY"""
-        return '=' # show channel as public by default
-
-    def userModeChar(self, user):
-        """Retuern '', '@', or '+', depending on user mode"""
-        return ''
-
-    def fullModeSpec(self):
-        # return no modes, by default
-        return ''
-
-    def notifyJoin(self, who):
-        self.proto.send_message(who, 'JOIN', self.name)
-    def notifyKick(self, kicker, kicked):
-        self.proto.send_message(kicker, 'KICK', self.name, kicked.nick)
-    def notifyPart(self, who, reason):
-        if reason is not None:
-            self.proto.send_message(who, 'PART', self.name, reason)
-        else:
-            self.proto.send_message(who, 'PART', self.name)
-    def notifyTopic(self):
-        self.proto.send_reply(irc.RPL_TOPIC, self.name, ':%s' % (self.topic()))
-    def sendModes(self):
-        self.proto.send_reply(irc.RPL_CHANNELMODEIS, self.name, self.fullModeSpec())
-
-    def _sendNames(self, members):
-        namelist = []
-        def flush():
-            names = ' '.join(namelist)
-            self.proto.send_reply(irc.RPL_NAMREPLY, '=', self.name, ':%s' % (names))
-            namelist[:] = []
-
-        for m in members:
-            namelist.append('%s%s' % (self.userModeChar(m), m.nick))
-            if len(namelist) > 30:
-                flush()
-        flush()
-        self.proto.send_reply(irc.RPL_ENDOFNAMES, self.name, ':End of NAMES list')
-
-    def sendNames(self):
-        def doit():
-            d = defer.maybeDeferred(self.list_members)
-            d.addCallbacks(send_names, error)
-            d.addErrback(log.err)
-
-        def send_names(members):
-            dbg("got member list: %d members" % (len(members)))
-            self._sendNames(members)
-
-        def error(e):
-            self.proto.notice("ERROR: failure getting member names for %s -- %s" % (self.name, e.value))
-            #FIXME: include the_user only if the user already joined
-            self._sendNames([self.proto.the_user])
-
-        doit()
-
-    @hooks
-    def userJoined(self, user):
-        self.notifyJoin(user)
-        self.notifyTopic()
-        self.sendNames()
-
-    @hooks
-    def userLeft(self, user, reason):
-        self.notifyPart(user, reason)
-
-    @hooks
-    def userQuit(self, user, reason):
-        pass
-
-    def messageReceived(self, sender, msg):
-        assert (sender is self.proto.the_user)
-        self.notify_message(sender, msg)
-
-    def topic(self):
-        return "[no topic set]"
-
-    def kickUser(self, sender, nickname):
-        return NotImplementedError("Can't kick users from %s" % (self.name))
-
-    def inviteUser(self, nickname):
-        return NotImplementedError("Can't invite users to %s" % (self.name))
-
-    def kickUsers(self, sender, users):
-        for u in users:
-            self.kickUser(sender, u)
-
-
-class IrcServer(IrcTarget):
-    """An IrcTarget used for server messages"""
-    def __init__(self, name):
-        self.name = name
-
-    def full_id(self):
-        return self.name
 
 
 class TwitterUserInfo:
@@ -502,7 +268,7 @@ class TwitterIrcUser(IrcUser):
     def messageReceived(self, sender, msg):
         assert (sender is self.proto.the_user)
 
-        msg = try_unicode(msg, ENCODING)
+        msg = try_unicode(msg, IRC_ENCODING)
         if len(msg) > LENGTH_LIMIT:
             #TODO: maybe there's a better error code for this?
             self.proto.send_reply(irc.RPL_AWAY, self.nick, ':message too long (%d characters), not sent.' % (len(msg)))
@@ -854,7 +620,7 @@ class TwitterChannel(IrcChannel):
         self.sendTwitterUpdate('/me %s' % (arg))
 
     def _sendTwitterUpdate(self, msg, args):
-        msg = try_unicode(msg, ENCODING)
+        msg = try_unicode(msg, IRC_ENCODING)
         if len(msg) > LENGTH_LIMIT:
             self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
             return
@@ -1521,7 +1287,7 @@ class PasserdProtocol(IRC):
             if not first:
                 #TODO: find a better way to indicate multi-line posts
                 line = '[...] '+line
-            self.send_privmsg(sender, target, line.encode(ENCODING))
+            self.send_privmsg(sender, target, line.encode(IRC_ENCODING))
             first = False
 
     def connectionLost(self, reason):
@@ -1598,10 +1364,10 @@ class PasserdProtocol(IRC):
         self.send_notice(self.my_irc_server, target, msg)
 
     def send_notice(self, sender, target, msg):
-        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg, ENCODING)))
+        self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg, IRC_ENCODING)))
 
     def send_privmsg(self, sender, target, msg):
-        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg, ENCODING)))
+        self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg, IRC_ENCODING)))
 
     def notice(self, msg):
         self.server_notice(self.the_user, msg)
@@ -2028,7 +1794,7 @@ class PasserdProtocol(IRC):
         #FIXME: find a better way to send user information, instead of RPL_AWAY
         #      - maybe just a pointer to a #!userinfo-nickname channel, where this info is available
         def oneline(s):
-            return full_entity_decode(s).encode(ENCODING).replace('\n', ' ').replace('\r', ' ')
+            return full_entity_decode(s).encode(IRC_ENCODING).replace('\n', ' ').replace('\r', ' ')
 
         self.send_reply(irc.RPL_AWAY, u.nick, ':Location: %s' % oneline(tu.location))
         self.send_reply(irc.RPL_AWAY, u.nick, ':URL: %s' % oneline(tu.url))
