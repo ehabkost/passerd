@@ -868,10 +868,21 @@ class ConfigCommands(ProtoDialog, CommandDialog):
         self.message('Sorry, this is not implemented yet')
 
 
+class BeCommands(ProtoDialog, CommandDialog):
+    """The 'be' command handler"""
+    help_header = 'Shortcut for many common config settings'
+    def command_happy(self, args):
+        self.message(':)')
+
+    def unknown_command(self, cmd, args):
+        self.message('Be what?')
+
+
 class PasserdCommands(CommandHelpMixin, CommandDialog):
     def dialog_init(self, proto):
         self.proto = proto
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
+        self.add_subdialog('be',  BeCommands(proto))
 
     shorthelp_login = 'Log into Passerd/Twitter'
     def help_login(self, args):
