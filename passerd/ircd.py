@@ -451,6 +451,9 @@ class TwitterChannel(IrcChannel):
             f.addCallback(self.got_entry)
             f.addErrback(self.refresh_error)
 
+        self.cmd_dialog = PasserdCommands(proto)
+        self.cmd_dialog.set_message_func(self.bot_msg)
+
     def _createFeeds(self):
         raise NotImplementedError("_createFeeds not implemented on %s" % (self.name))
 
@@ -585,10 +588,7 @@ class TwitterChannel(IrcChannel):
                 last = 0
             return self.forceRefresh(last)
 
-        if cmd == 'rate':
-            api = self.proto.api
-            self.bot_msg('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
-            return
+        self.cmd_dialog.recv_message(cmd)
 
     def messageReceived(self, sender, msg):
         if msg.startswith('!'):
@@ -891,6 +891,10 @@ class PasserdCommands(CommandDialog):
         r = gc.collect()
         self.message("Garbage collection run. %d objects freed" % (r))
         self.message("New object counts: %r" % (gc.get_count(),))
+
+    def command_rate(self, args):
+        api = self.proto.api
+        self.message('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
 
 
 class PasserdBot(IrcUser):
