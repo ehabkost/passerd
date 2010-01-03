@@ -43,6 +43,7 @@ from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
+from passerd.dialogs import Dialog, attach_dialog_to_channel
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
@@ -281,6 +282,14 @@ class IrcChannel(IrcTarget):
     def __init__(self, proto, name):
         self.name = name
         self.proto = proto
+        self.msg_notifiers  = []
+
+    def add_msg_notifier(self, func):
+        self.msg_notifiers.append(func)
+
+    def notify_message(self, sender, msg):
+        for func in self.msg_notifiers:
+            func(self, sender, msg)
 
     def target_name(self):
         return self.name
@@ -382,7 +391,8 @@ class IrcChannel(IrcTarget):
         pass
 
     def messageReceived(self, sender, msg):
-        raise NotImplementedError("Channel %s doesn't handle incoming messages" % (self.name))
+        assert (sender is self.proto.the_user)
+        self.notify_message(sender, msg)
 
     def topic(self):
         return "[no topic set]"
@@ -1282,32 +1292,13 @@ class OAuthClient:
         return d
 
 
-class UserSetupChannel(IrcChannel):
-    def __init__(self, proto, name):
-        IrcChannel.__init__(self, proto, name)
-        self.patterns = []
-        self.wait_for(r'.*', self.start_wizard)
+class NewUserDialog(Dialog):
+    def dialog_init(self, proto):
+        self.proto = proto
 
-    def bot_message(self, msg):
-        self.send_message(self.proto.passerd_bot, msg)
-
-    def list_members(self):
-        return [self.proto.the_user, self.proto.passerd_bot]
-
-    def wait_for(self, regexp, func, flags=re.I, strip=True):
-        if strip:
-            filter = (lambda s: s.strip())
-        else:
-            filter = (lambda s: s)
-
-        self.patterns.insert(0, (filter, re.compile(regexp, flags), func) )
-
-    def afterUserJoined(self, who):
-        self.start_wizard()
-
-    def start_wizard(self, *args):
+    def begin(self, *args):
         def bm(msg):
-            self.bot_message(msg)
+            self.message(msg)
 
         def welcome():
             bm('Welcome!')
@@ -1426,18 +1417,23 @@ class UserSetupChannel(IrcChannel):
 
         welcome()
 
-    def messageReceived(self, sender, msg):
-        assert (sender is self.proto.the_user)
-        for filter,expr,func in self.patterns:
-            s = filter(msg)
-            m = expr.search(s)
-            if m:
-                try:
-                    func(msg, m)
-                except Exception,e:
-                    self.bot_message("An error has occurred. Sorry. -- %s" % (e))
-                return
-        self.bot_message("Sorry, I don't know what you mean")
+class UserSetupChannel(IrcChannel):
+    def __init__(self, proto, name):
+        IrcChannel.__init__(self, proto, name)
+
+        self.dialog = d = NewUserDialog(proto)
+        attach_dialog_to_channel(d, self, self.proto.passerd_bot)
+
+        # start the dialog automatically if any message is received on
+        # the channel:
+        d.wait_for('.*', lambda *a: d.begin())
+
+    def list_members(self):
+        return [self.proto.the_user, self.proto.passerd_bot]
+
+    def afterUserJoined(self, who):
+        self.dialog.begin()
+
 
 def requires_auth(fn):
     """A decorator for a generic authentication check before handling certain commands
