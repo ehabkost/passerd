@@ -1376,11 +1376,11 @@ class UserSetupChannel(IrcChannel):
             bm("Now Passerd can post to your account, but you still need to authenticate when connecting to Passerd")
 
             bm("You have two authentication options:")
-            bm("1) Twitter password: Just use your Twitter password when connecting to Passerd")
-            bm("2) Local password: Set a password just for Passerd, then you'll never need to reveal your Twitter password")
+            bm("1) Local password (recommended): Set a password just for Passerd, then you'll never need to reveal your Twitter password")
+            bm("2) Twitter password: Just use your Twitter password when connecting to Passerd")
             bm("Which option do you want to use? (twitter/local)")
-            self.wait_for(r'^ *twi|^ *1 *$', all_set)
-            self.wait_for(r'^ *loc|^ *2 *$', setup_password)
+            self.wait_for(r'^ *loc|^ *1 *$', setup_password)
+            self.wait_for(r'^ *twi|^ *2 *$', all_set)
 
         def all_set(msg,m):
             bm("OK, so you are all set")
