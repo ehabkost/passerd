@@ -41,7 +41,7 @@ from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
-from passerd.dialogs import Dialog, CommandDialog, attach_dialog_to_channel, attach_dialog_to_bot
+from passerd.dialogs import Dialog, CommandDialog, CommandHelpMixin, attach_dialog_to_channel, attach_dialog_to_bot
 from passerd.util import try_unicode, to_str
 from passerd.irc import IrcUser, IrcChannel, IrcServer
 from passerd.poauth import OAuthClient, oauth_consumer
@@ -864,17 +864,18 @@ class ProtoDialog:
 class ConfigCommands(ProtoDialog, CommandDialog):
     shorthelp_set = 'Change a config option'
     def command_set(self, args):
-        self.message('set works')
+        #FIXME: implement me
+        self.message('Sorry, this is not implemented yet')
 
 
-class PasserdCommands(CommandDialog):
+class PasserdCommands(CommandHelpMixin, CommandDialog):
     def dialog_init(self, proto):
         self.proto = proto
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
 
     shorthelp_login = 'Log into Passerd/Twitter'
     def help_login(self, args):
-        self.message("Syntax: LOGIN twitter-login password")
+        self.message("Syntax: %sLOGIN twitter-login password" % (self.cmd_prefix))
         self.message("If you don't have an account yet, join the #new-user-setup channel")
 
     def command_login(self, args):
@@ -915,6 +916,8 @@ class PasserdCommands(CommandDialog):
             self.message('You are not logged in. No rate limit info is available')
             return
         self.message('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
+
+
 
 
 class PasserdBot(IrcUser):

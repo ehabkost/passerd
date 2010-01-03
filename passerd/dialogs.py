@@ -83,16 +83,7 @@ class CommandDialog(Dialog):
             fn = self.commands.get(cmd.lower())
         return fn
 
-    def add_subdialog(self, cmd, dialog, short_help):
-        def doit():
-            self.subdialogs.append( (cmd, dialog) )
-
-            dialog.set_message_func(self.message)
-            self._set_subdialog_prefix(cmd, dialog)
-            self.add_command(cmd, handle_cmd)
-            setattr(self, 'help_%s' % (cmd), show_help)
-            setattr(self, 'shorthelp_%s' % (cmd), short_help)
-
+    def add_subdialog(self, cmd, dialog, short_help=None):
         def show_help(args):
             dialog.show_help('%s: ' % (cmd.upper()), args)
 
@@ -101,7 +92,16 @@ class CommandDialog(Dialog):
                 args = ''
             dialog.recv_message(args)
 
-        doit()
+        self.subdialogs.append( (cmd, dialog) )
+
+        dialog.set_message_func(self.message)
+        self._set_subdialog_prefix(cmd, dialog)
+        self.add_command(cmd, handle_cmd)
+        setattr(self, 'help_%s' % (cmd), show_help)
+        if short_help is None:
+            short_help = dialog.get_help_header()
+        if short_help:
+            setattr(self, 'shorthelp_%s' % (cmd), short_help)
 
     def split_args(self, s):
         s = s.lstrip()
@@ -115,10 +115,15 @@ class CommandDialog(Dialog):
 
     def _short_help(self, cmd):
         sh = getattr(self, 'shorthelp_%s' % (cmd.lower()), None)
-        if sh:
-            return '%s - %s' % (cmd.upper(), sh)
-        else:
+        if sh is None:
             return None
+
+        # command get a full prefix
+        if self._command_fn(cmd):
+            prefix = self.cmd_prefix
+        else:
+            prefix = ''
+        return '%s%s - %s' % (prefix, cmd.upper(), sh)
 
     def _long_help(self, cmd, args):
         fn = getattr(self, 'help_%s' % (cmd.lower()), None)
@@ -130,25 +135,49 @@ class CommandDialog(Dialog):
             return
         self.message("Unknown help topic: %s" % (cmd))
 
+    def get_help_header(self):
+        return getattr(self, 'help_header', None)
+
+    def show_help_header(self, args):
+        h = self.get_help_header()
+        if h:
+            self.message(h)
+
     def show_help(self, prefix, args):
         if args:
             cmd,rest = self.split_args(args)
             return self._long_help(cmd, rest)
 
         topics = []
+        commands = []
         for a in dir(self):
             if a.startswith('shorthelp_'):
                 _,t = a.split('_',1)
-                topics.append(t)
+                if self._command_fn(t):
+                    commands.append(t)
+                else:
+                    topics.append(t)
         topics.sort()
-        self.message('%sAvailable topics/commands:' % (prefix))
-        for t in topics:
-            self.message(self._short_help(t))
-        self.message("Use '%sHELP topic' to get more info on a topic" % (self.cmd_prefix))
+        commands.sort()
 
-    shorthelp_help = 'Show help'
+        self.show_help_header(args)
+        if commands:
+            self.message('%sAvailable commands:' % (prefix))
+            for c in commands:
+                self.message(self._short_help(c))
+        if topics:
+            self.message('Other help topics:' % (prefix))
+            for t in topics:
+                self.message(self._short_help(t))
+        self.show_help_footer(args)
+
+    def show_help_footer(self, args):
+        pass
+
+    def help_help(self, args):
+        self.message('Syntax: %sHELP command-or-topic' % (self.cmd_prefix))
     def command_help(self, args):
-        return self.show_help('', args)
+        self.show_help('', args)
 
     def recv_message(self, msg):
         cmd,args = self.split_args(msg)
@@ -157,6 +186,9 @@ class CommandDialog(Dialog):
             return self.unknown_command(cmd, args)
         return fn(args)
 
+
+class CommandHelpMixin:
+    shorthelp_help = 'Show help'
 
 
 def attach_dialog_to_channel(dialog, chan, bot_user):
@@ -186,3 +218,5 @@ def attach_dialog_to_bot(dialog, proto, real_user, bot):
         proto.send_notice(bot, real_user, msg)
 
     doit()
+
+__all__ = ['Dialog', 'CommandDialog', 'CommandHelpMixin', 'attach_dialog_to_channel', 'attach_dialog_to_bot']
