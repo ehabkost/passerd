@@ -3,6 +3,7 @@
   solution until a true rate-limit-adjusting scheduler is written
 * Unify `passerd-bot` commands and implementation of `!command` on `#twitter`
   * Including a help system
+* Add a '!post' command (aliases: '!tw', '!twit', '!update')
 
 
 ### Passerd 0.0.4.2 - 28 Dec 2009
