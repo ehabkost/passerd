@@ -130,6 +130,13 @@ class ErrorReply(Exception):
 class MissingOAuthRegistration(Exception):
     pass
 
+class MessageTooLong(Exception):
+    def __init__(self, text, length):
+        self.text = text
+        self.length = length
+        Exception.__init__(self, 'message too long (%d characters)' % (length))
+
+
 
 class TwitterUserInfo:
     """Just carries simple data for a Twitter user
@@ -594,29 +601,29 @@ class TwitterChannel(IrcChannel):
         if msg.startswith('!'):
             return self.commandReceived(msg[1:])
 
-        self.sendTwitterUpdate(msg)
+        self.do_send_twitter_post(msg)
 
     def ctcp_ACTION(self, arg):
         dbg("ACTION: %r" % (arg))
         #TODO: make the behavior of "/me" messages configurable
-        self.sendTwitterUpdate('/me %s' % (arg))
+        self.do_send_twitter_post('/me %s' % (arg))
 
-    def _sendTwitterUpdate(self, msg, args):
-        msg = try_unicode(msg, IRC_ENCODING)
-        if len(msg) > LENGTH_LIMIT:
-            self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':message too long (%d characters)' % (len(msg)))
-            return
-
+    def do_send_twitter_post(self, msg):
         def doit():
-            self.proto.api.update(msg, params=args).addCallbacks(done, error)
+            return self.send_twitter_post(msg).addCallback(done).addErrback(error)
 
         def done(*args):
-            self.proto.dbg("Twitter update posted!!")
+            #FIXME: remove this notice once we update the channel topic. we don't need it.
+            self.bot_notice("Twitter update posted!!")
 
         def error(e):
+            if e.check(MessageTooLong):
+                # message-too-long errors
+                self.proto.send_reply(irc.ERR_CANNOTSENDTOCHAN, self.name, ':%s' % (str(e.value)))
+                return
             self.bot_msg("%s: error while posting: %s" % (self.proto.the_user.nick, e.value))
 
-        doit()
+        return doit()
 
     def _add_in_reply_to(self, msg, args):
         m = REPLY_RE.match(msg)
@@ -645,11 +652,11 @@ class TwitterChannel(IrcChannel):
 
         return msg
 
-    def sendTwitterUpdate(self, msg):
+    def send_twitter_post(self, msg):
         args = {}
         msg = self._add_in_reply_to(msg, args)
         dbg("msg: %r. args: %r", msg, args)
-        return self._sendTwitterUpdate(msg, args)
+        return self.proto.send_twitter_post(msg, args)
 
 
 class FriendlistMixIn:
@@ -1638,10 +1645,13 @@ class PasserdProtocol(IRC):
             self.welcome_anonymous()
 
 
-    ### Oauth authentication code:
+    def send_twitter_post(self, msg, args={}):
+        msg = try_unicode(msg, IRC_ENCODING)
+        if len(msg) > LENGTH_LIMIT:
+            return defer.fail(MessageTooLong(msg, len(msg)))
 
+        return self.api.update(msg, params=args)
 
-    ### end of oauth code
 
     def get_user(self, nick):
         #FIXME; index by nickname
