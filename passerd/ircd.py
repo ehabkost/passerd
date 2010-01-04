@@ -253,8 +253,7 @@ class TwitterIrcUser(IrcUser):
         msg = try_unicode(msg, IRC_ENCODING)
         if len(msg) > LENGTH_LIMIT:
             #TODO: maybe there's a better error code for this?
-            self.proto.send_reply(irc.RPL_AWAY, self.nick, ':message too long (%d characters), not sent.' % (len(msg)))
-            return
+            raise ErrorReply(irc.RPL_AWAY, self.nick, ':message too long (%d characters), not sent.' % (len(msg)))
 
         def doit():
             self.send_direct_message(msg).addCallbacks(done, error)
