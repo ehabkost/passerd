@@ -886,7 +886,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
     shorthelp_login = 'Log into Passerd/Twitter'
     def help_login(self, args):
-        self.message("Syntax: %sLOGIN twitter-login password" % (self.cmd_prefix))
+        self.cmd_syntax('login', 'twitter-login password')
         self.message("If you don't have an account yet, join the #new-user-setup channel")
 
     def command_login(self, args):

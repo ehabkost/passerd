@@ -174,8 +174,13 @@ class CommandDialog(Dialog):
     def show_help_footer(self, args):
         pass
 
+    def cmd_syntax(self, cmd, args):
+        if args: suffix = ' %s' % (args)
+        else: suffix = ''
+        self.message('Usage: %s%s%s' % (self.cmd_prefix, cmd.upper(), suffix))
+
     def help_help(self, args):
-        self.message('Syntax: %sHELP command-or-topic' % (self.cmd_prefix))
+        self.cmd_syntax('help', 'command-or-topic')
     def command_help(self, args):
         self.show_help('', args)
 
