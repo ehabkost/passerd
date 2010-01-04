@@ -457,7 +457,7 @@ class TwitterChannel(IrcChannel):
             f.addCallback(self.got_entry)
             f.addErrback(self.refresh_error)
 
-        self.cmd_dialog = PasserdCommands(proto)
+        self.cmd_dialog = PasserdCommands(proto, self)
         self.cmd_dialog.set_message_func(self.bot_msg)
         self.cmd_dialog.set_cmd_prefix('!')
 
@@ -885,8 +885,9 @@ class BeCommands(ProtoDialog, CommandDialog):
 
 
 class PasserdCommands(CommandHelpMixin, CommandDialog):
-    def dialog_init(self, proto):
+    def dialog_init(self, proto, chan=None):
         self.proto = proto
+        self.chan = chan
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
         self.add_subdialog('be',  BeCommands(proto))
 
@@ -944,7 +945,7 @@ class PasserdBot(IrcUser):
         self.proto = proto
         self.nick = nick
 
-        self.dialog = d = PasserdCommands(proto)
+        self.dialog = d = PasserdCommands(proto, None)
         attach_dialog_to_bot(d, proto, proto.the_user, self)
 
     real_name = 'Passerd Bot'
