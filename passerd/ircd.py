@@ -528,6 +528,7 @@ class TwitterChannel(IrcChannel):
 
     def refresh_error(self, e):
         dbg("#twitter refresh error")
+        #FIXME: stop showing repeated errors and just let the user know when service is back
         if e.check(twisted.web.error.Error):
             if str(e.value.status) == '503':
                 self.bot_notice("Look! A flying whale! -- %s" % (e.value))
