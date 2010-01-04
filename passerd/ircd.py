@@ -892,6 +892,10 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
         self.add_subdialog('be',  BeCommands(proto))
 
+        self.add_alias('twit',   'post')
+        self.add_alias('tw',     'post')
+        self.add_alias('update', 'post')
+
     shorthelp_login = 'Log into Passerd/Twitter'
     def help_login(self, args):
         self.cmd_syntax('login', 'twitter-login password')
@@ -935,6 +939,36 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             self.message('You are not logged in. No rate limit info is available')
             return
         self.message('Rate limit: %s. remaining: %s. reset: %s' % (api.rate_limit_limit, api.rate_limit_remaining, time.ctime(api.rate_limit_reset)))
+
+    shorthelp_post = 'Post an update to Twitter'
+    def help_post(self, args):
+        self.cmd_syntax('post', 'text')
+        self.message("Post an update to Twitter")
+
+    def command_post(self, args):
+        if not args:
+            self.help_post(None)
+            return
+
+        def doit():
+            # if there is an associated channel, use it as context for the
+            # Twitter post. Otherwise, just use the general send_twitter_post()
+            # method
+            ch = self.chan
+            if ch:
+                d = ch.send_twitter_post(args)
+            else:
+                d = self.proto.send_twitter_post(args)
+            d.addCallback(done).addErrback(error)
+
+        def done(*args):
+            self.message("Done. Twitter update posted")
+
+        def error(e):
+            self.message("Error while posting: %s" % (e.value))
+
+        doit()
+
 
 
 
