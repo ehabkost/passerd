@@ -27,17 +27,22 @@ class Dialog:
 
         self.patterns.insert(0, (filter, re.compile(regexp, flags), func) )
 
+    def unknown_message(self, msg):
+        self.message("Sorry, I don't know what you mean")
+
+    def error_reply(self, msg, e):
+        self.message("An error has occurred. Sorry. -- %s" % (e))
+
     def recv_message(self, msg):
         for filter,expr,func in self.patterns:
             s = filter(msg)
             m = expr.search(s)
             if m:
                 try:
-                    func(msg, m)
+                    return func(msg, m)
                 except Exception,e:
-                    self.message("An error has occurred. Sorry. -- %s" % (e))
-                return
-        self.message("Sorry, I don't know what you mean")
+                    return self.error_reply(msg, e)
+        return self.unknown_message(msg)
 
     def message(self, msg):
         """Send a message to the user"""
@@ -184,12 +189,20 @@ class CommandDialog(Dialog):
     def command_help(self, args):
         self.show_help('', args)
 
-    def recv_message(self, msg):
+    def try_msg(self, msg, unknown_fn=None):
         cmd,args = self.split_args(msg)
         fn = self._command_fn(cmd)
         if fn is None:
+            return False,(cmd,args)
+        return True,fn(args)
+
+    def recv_message(self, msg):
+        worked,r = self.try_msg(msg)
+        if worked:
+            return r
+        else:
+            cmd,args = r
             return self.unknown_command(cmd, args)
-        return fn(args)
 
 
 class CommandHelpMixin:
