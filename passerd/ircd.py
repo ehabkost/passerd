@@ -56,7 +56,7 @@ from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 ####
 
 MYNAME = 'Passerd'
-VERSION = '0.0.4'
+VERSION = '0.0.5'
 MYAGENT = '%s/%s' % (MYNAME, VERSION)
 #FIXME: use a real hostname?
 MYHOST = 'passerd.server'

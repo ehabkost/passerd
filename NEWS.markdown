@@ -1,3 +1,4 @@
+### Passerd 0.0.5 - 6 Jan 2010
 
 * Don't continue refreshing feeds if rate-limit is hit. This is a temporary
   solution until a true rate-limit-adjusting scheduler is written
