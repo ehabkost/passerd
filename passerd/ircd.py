@@ -41,6 +41,7 @@ from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
+from passerd.scheduler import ApiScheduler
 from passerd import dialogs
 from passerd.dialogs import Dialog, CommandDialog, CommandHelpMixin, attach_dialog_to_channel, attach_dialog_to_bot
 from passerd.util import try_unicode, to_str
@@ -1193,6 +1194,7 @@ class PasserdProtocol(IRC):
 
         # fields that will be available only after authentication:
         self.api = None
+        self.scheduler = None
         self.authenticated_user = None
         self.user_data = None
         self.got_user = False
@@ -1658,6 +1660,7 @@ class PasserdProtocol(IRC):
 
             # authentication worked. set up variables:
             self.api = api
+            self.scheduler = ApiScheduler(api)
             self.set_authenticated_user(u)
             d.callback(u)
 
@@ -1864,7 +1867,8 @@ class PasserdGlobalOptions:
         # - enable oauth debugging, by now
         self.loglevels = [(None,         logging.INFO),
                           ('sqlalchemy', logging.ERROR),
-                          ('passerd.oauth',logging.DEBUG)]
+                          ('passerd.oauth',logging.DEBUG),
+                          ('passerd.scheduler',logging.DEBUG)]
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):

@@ -80,6 +80,10 @@ class TwitterFeed:
         return self.proto.api
     api = property(get_api)
 
+    @property
+    def scheduler(self):
+        return self.proto.scheduler
+
     def cancel_next_refresh(self):
         if self.next_refresh is not None:
             if self.next_refresh.active():
@@ -88,7 +92,7 @@ class TwitterFeed:
 
     def refresh_resched(self, delay=REFRESH_DELAY):
         self.cancel_next_refresh()
-        self.next_refresh = reactor.callLater(delay, self.refresh)
+        self.next_refresh = self.scheduler.request_slot(self.refresh, delay)
 
     def _refresh(self, last_id=None):
         if last_id is None:
