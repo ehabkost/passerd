@@ -884,8 +884,12 @@ class ConfigCommands(ProtoDialog, CommandDialog):
         self.message('Sorry, this is not implemented yet')
 
 
-class BeCommands(ProtoDialog, CommandDialog):
+class BeCommands(CommandDialog):
     """The 'be' command handler"""
+    def dialog_init(self, proto, *args, **kwargs):
+        self.proto = proto
+        self.add_alias('paranoid', 'careful')
+
     help_header = 'Shortcut for many common config settings'
     def command_happy(self, args):
         self.message(':)')
