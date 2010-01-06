@@ -95,7 +95,7 @@ class CommandDialog(Dialog):
         self.add_command(alias, self._command_fn(cmd))
         sh = self._short_help(cmd)
         if sh:
-            setattr(self, 'shorthelp_%s' % (alias.lower()), 'Synonym to %s: %s' % (cmd.upper(), sh))
+            setattr(self, 'shorthelp_%s' % (alias.lower()), 'Synonym to `%s`: %s' % (cmd, sh))
             setattr(self, 'importance_%s' % (alias.lower()), imp)
 
     def _command_fn(self, cmd):
@@ -287,4 +287,3 @@ def attach_dialog_to_bot(dialog, proto, real_user, bot):
 
     doit()
 
-__all__ = ['Dialog', 'CommandDialog', 'CommandHelpMixin', 'attach_dialog_to_channel', 'attach_dialog_to_bot']

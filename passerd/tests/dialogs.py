@@ -116,11 +116,14 @@ class TestCommands(DialogTestMixin, TestCase):
         self.assertMsgs('nono-yesyes no')
 
     def testAlias(self):
-        self.d.add_alias('hello', 'hi')
+        self.d.add_alias('hey', 'hi')
+        self.d.add_alias('hello', 'hI', imp=CMD_IMP_COMMON)
         self.rcv('hello world')
         self.assertMsgs('hi world!')
         self.rcv('help')
-        self.assertSomeRe('HELLO - Synonym to HI: say hi')
+        # check even if case matches ("hI" above)
+        self.assertSomeRe('Other commands: .*HEY')
+        self.assertSomeRe('HELLO - Synonym to `hI`: say hi')
 
 if __name__ == '__main__':
     unittest.main()
