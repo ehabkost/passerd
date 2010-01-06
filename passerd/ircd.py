@@ -899,7 +899,7 @@ class BeCommands(CommandDialog):
 
     shorthelp_careful = "Don't post channel messages to Twitter directly"
     def command_careful(self, args):
-        self.message('I will. From now on Twitter updates can '
+        self.message('I will. From now on, Twitter updates can '
                       'only be sent with `%stw <message>`' % (self.parent.cmd_prefix))
         self.message('You can disable this setting using: `%sbe brave`' % (self.parent.cmd_prefix))
         self.proto.set_user_cfg_var('careful', True)
