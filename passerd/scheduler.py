@@ -36,7 +36,9 @@ dbg = logger.debug
 # so we don't hit the rate-limit if the user is following too many feeds.
 # Twitter default rate limit is 150 requests/hour. REFRESH_DELAY=45 should
 # result on 80 requets per hour
-REFRESH_DELAY = 45
+
+MAX_REQS_PER_HOUR = 80
+REFRESH_DELAY = int(3600/MAX_REQS_PER_HOUR)
 
 class RefreshUpdater:
     def __init__(self, scheduler, fn):
