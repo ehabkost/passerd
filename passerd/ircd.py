@@ -550,8 +550,7 @@ class TwitterChannel(IrcChannel):
                 'Twitter timeline again.' % (reset))
         self.bot_msg('You still can force the check by sending `!`. Also '
                 'you can check the rate limit by sending `!rate`.')
-        for feed in self.feeds:
-            feed.wait_rate_limit()
+        self.proto.scheduler.wait_rate_limit()
 
     def start(self):
         for f in self.feeds:
@@ -1238,6 +1237,7 @@ class PasserdProtocol(IRC):
         for ch in self.autojoin_channels:
             self.join_cname(ch)
         self.dm_feed.start_refreshing()
+        self.scheduler.start()
 
     def welcome_anonymous(self):
         self.notice("Welcome, anonymous user!")
@@ -1250,10 +1250,17 @@ class PasserdProtocol(IRC):
         self.send_notice(self.passerd_bot, self.the_user, "Please join #new-user-setup to set up your account")
         self.join_cname('#new-user-setup')
 
+    def _set_scheduler(self, scheduler):
+        if self.scheduler:
+            self.scheduler.stop()
+            self.scheduler = None
+        self.scheduler = scheduler
+
     def _userQuit(self, reason):
         self.dm_feed.stop_refreshing()
         for ch in self.joined_channels:
             self.leave_channel(ch, reason)
+        self._set_scheduler(None)
         self.quit_sent = True
 
     def userQuit(self, reason):
@@ -1660,7 +1667,7 @@ class PasserdProtocol(IRC):
 
             # authentication worked. set up variables:
             self.api = api
-            self.scheduler = ApiScheduler(api)
+            self._set_scheduler(ApiScheduler(api))
             self.set_authenticated_user(u)
             d.callback(u)
 
@@ -1868,6 +1875,7 @@ class PasserdGlobalOptions:
         self.loglevels = [(None,         logging.INFO),
                           ('sqlalchemy', logging.ERROR),
                           ('passerd.oauth',logging.DEBUG),
+                          ('passerd.feeds',logging.DEBUG),
                           ('passerd.scheduler',logging.DEBUG)]
 
 def parse_cmdline(args, opts):

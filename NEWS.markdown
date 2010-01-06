@@ -1,3 +1,14 @@
+### Current development version:
+
+* Add a simple scheduling algorithm that will make sure Passerd don't
+  kill the Twitter API rate-limit if the user joins too many Passerd
+  channels.
+
+  With this in place, Passerd will never make more than 80 requests per hour,
+  even if many feeds are being followed at the same time (not taking the
+  channel-join-time and login-time requests into account, though).
+
+
 ### Passerd 0.0.5 - 6 Jan 2010
 
 * Don't continue refreshing feeds if rate-limit is hit. This is a temporary

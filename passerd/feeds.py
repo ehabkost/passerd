@@ -33,21 +33,18 @@ from twisted.internet import reactor, defer
 
 from passerd.callbacks import CallbackList
 
-# refresh delay in seconds. We don't have a rate-limiting scheduler (yet),
-# so be careful when decreasing this. By default we have three feeds running:
-# home_timeline, direct_messages, and mentions. Keep this above 72 seconds
-REFRESH_DELAY = 90
-
 # 'count' paremeter for feed queries. It's a bit high, but this shouldn't be a
 # problem as we always use the last_id parameter.
 QUERY_COUNT = 100
 
-dbg = logging.debug
+logger = logging.getLogger('passerd.feeds')
+dbg = logger.debug
 
 class TwitterFeed:
 
     def __init__(self, proto):
         self.proto = proto
+        self.updater = None
         self.callbacks = CallbackList()
         self.errbacks = CallbackList()
         self.continue_refreshing = False
@@ -76,23 +73,17 @@ class TwitterFeed:
         """Add a callbck for loading errors"""
         self.errbacks.addCallback(*args, **kwargs)
 
-    def get_api(self):
+    @property
+    def api(self):
         return self.proto.api
-    api = property(get_api)
 
     @property
     def scheduler(self):
         return self.proto.scheduler
 
-    def cancel_next_refresh(self):
-        if self.next_refresh is not None:
-            if self.next_refresh.active():
-                self.next_refresh.cancel()
-            self.next_refresh = None
-
-    def refresh_resched(self, delay=REFRESH_DELAY):
-        self.cancel_next_refresh()
-        self.next_refresh = self.scheduler.request_slot(self.refresh, delay)
+    def refresh_resched(self):
+        if self.updater is not None:
+            self.updater.resched()
 
     def _refresh(self, last_id=None):
         if last_id is None:
@@ -116,7 +107,7 @@ class TwitterFeed:
 
         # store the entries and then show them in chronological order:
         def got_entry(e):
-            dbg("got an entry: %r" % (repr(e)))
+            dbg("got an entry")
             entries.insert(0, e)
 
         def finished(*args):
@@ -136,45 +127,35 @@ class TwitterFeed:
                 dbg("Won't refresh now. Still loading...")
                 return
 
-            self.cancel_next_refresh()
             self.loading = True
-            self._refresh().addCallbacks(done, error)
+            self._refresh().addCallbacks(done, error).addBoth(resched)
 
         def error(*args):
-            self.loading = False
             dbg("ERROR while refreshing")
-            resched()
 
         def done(num_entries):
-            self.loading = False
             dbg("got %d entries." % (num_entries))
-            resched()
 
-        def resched():
+        def resched(*args):
+            self.loading = False
             dbg("rescheduling...")
-            if self.continue_refreshing:
-                self.refresh_resched()
+            self.refresh_resched()
 
         return doit()
 
-    def wait_rate_limit(self):
-        delay = int(self.api.rate_limit_reset - time.time())
-        reset = time.ctime(self.api.rate_limit_reset)
-        if delay > REFRESH_DELAY:
-            dbg("Rescheduling the next feed refresh to %s (%s seconds),"
-                " as the rate limit was exhausted." % (reset, delay))
-            self.refresh_resched(delay)
-        else:
-            dbg("No need to resched to wait for rate-limit, as the "
-                "delay is only %s seconds" % (delay))
-
     def stop_refreshing(self):
-        self.continue_refreshing = False
-        self.cancel_next_refresh()
+        if self.updater is not None:
+            self.updater.destroy()
+            self.updater = None
 
     def start_refreshing(self):
-        self.continue_refreshing = True
-        self.refresh()
+        if self.updater is None:
+            self.updater = self.scheduler.new_updater(self.refresh)
+            # yes, this is cheating, but I don't want to make the user wait for
+            # too long
+            #FIXME: just add support for 'one-shot lower-latency' calls on
+            #       the scheduler, instead of cheating
+            self.refresh()
 
 class ListTimelineFeed(TwitterFeed):
 
