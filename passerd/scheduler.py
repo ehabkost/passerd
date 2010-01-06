@@ -26,7 +26,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import logging
+import logging, time
 from twisted.internet import reactor, defer
 
 logger = logging.getLogger('passerd.scheduler')
