@@ -1,3 +1,5 @@
+import re
+
 from passerd.dialogs import *
 
 from unittest import TestCase
@@ -15,16 +17,17 @@ class DialogTestMixin:
         self.assertEquals(self.log.msgs, list(args))
 
     def assertSomeMsg(self, msg):
-        self.assertTrue(msg in self.log.msgs)
+        self.assertTrue(msg in self.log.msgs, '%r is not among the replies' % (msg))
 
-    def _hasSomeSubstr(self, substr):
+    def _hasSomeRe(self, pat, flags=0):
+        r = re.compile(pat, flags)
         for m in self.log.msgs:
-            if substr in m:
+            if r.search(m):
                 return True
         return False
 
-    def assertSomeSubstr(self, s):
-        self.assertTrue(self._hasSomeSubstr(s))
+    def assertSomeRe(self, pat, flags=0):
+        self.assertTrue(self._hasSomeRe(pat, flags), '%r is not a match on any reply' % (pat))
 
     def msgs(self, *args):
         for a in args:
@@ -47,7 +50,7 @@ class SimpleDialogTest(DialogTestMixin, TestCase):
         self.wait('hi', 'hi!')
         self.rcv('hi')
         self.assertMsgs('hi!')
-        self.assertFalse(self._hasSomeSubstr('nononono'))
+        self.assertFalse(self._hasSomeRe('nononono'))
 
     def testMulti(self):
         self.wait('bye', 'bye', 'see you later')
@@ -81,7 +84,7 @@ class SimpleDialogTest(DialogTestMixin, TestCase):
         self.rcv('explode now')
         self.assertEquals(len(self.log.msgs), 1)
         # check just if the exception message is inside the received reply:
-        self.assertTrue('[error: explode now - now]' in self.log.msgs[0])
+        self.assertTrue('[error: explode now - now]' in self.log.msgs[0], 'no exception text on error reply')
 
 
 class _TestCommands(CommandDialog):
@@ -100,18 +103,24 @@ class TestCommands(DialogTestMixin, TestCase):
 
     def testHelp(self):
         self.rcv('help')
-        self.assertSomeSubstr('HI - say hi')
+        self.assertSomeRe('HI - say hi')
 
     def testPrefix(self):
         self.d.set_cmd_prefix('!FOO-')
         self.rcv('help')
-        self.assertSomeSubstr('!FOO-HI - say hi')
+        self.assertSomeRe('!FOO-HI - say hi')
 
     def testUnknown(self):
         self.d.unknown_command = lambda cmd,args: self.d.message('%s-%s' % (cmd,args))
         self.rcv('nono yesyes no')
         self.assertMsgs('nono-yesyes no')
 
+    def testAlias(self):
+        self.d.add_alias('hello', 'hi')
+        self.rcv('hello world')
+        self.assertMsgs('hi world!')
+        self.rcv('help')
+        self.assertSomeRe('HELLO - Synonym to HI: say hi')
 
 if __name__ == '__main__':
     unittest.main()

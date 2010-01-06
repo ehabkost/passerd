@@ -41,6 +41,7 @@ from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
 from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
+from passerd import dialogs
 from passerd.dialogs import Dialog, CommandDialog, CommandHelpMixin, attach_dialog_to_channel, attach_dialog_to_bot
 from passerd.util import try_unicode, to_str
 from passerd.irc import IrcUser, IrcChannel, IrcServer
@@ -864,7 +865,7 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
 
 class ProtoDialog:
     """A simple mixin to set a 'proto' attribute on dialog_init()"""
-    def dialog_init(self, proto):
+    def dialog_init(self, proto, *args, **kwargs):
         self.proto = proto
 
 
@@ -886,12 +887,13 @@ class BeCommands(ProtoDialog, CommandDialog):
 
 
 class PasserdCommands(CommandHelpMixin, CommandDialog):
-    def dialog_init(self, proto, chan=None):
+    def dialog_init(self, proto, chan=None, *args, **kwargs):
         self.proto = proto
         self.chan = chan
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
         self.add_subdialog('be',  BeCommands(proto))
 
+        self.add_alias('s',   'post')
         self.add_alias('twit',   'post')
         self.add_alias('tw',     'post')
         self.add_alias('update', 'post')
@@ -926,6 +928,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         doit()
 
     shorthelp_gc = 'Run Python garbage collection (debugging/testing command)'
+    importance_gc = dialogs.CMD_IMP_DEBUGGING
     def command_gc(self, args):
         self.message("Object counts: %r" % (gc.get_count(),))
         r = gc.collect()
@@ -933,6 +936,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         self.message("New object counts: %r" % (gc.get_count(),))
 
     shorthelp_rate = 'Show Twitter API rate-limit info'
+    importance_rate = dialogs.CMD_IMP_ADVANCED
     def command_rate(self, args):
         api = self.proto.api
         if api is None:
@@ -1285,7 +1289,7 @@ class PasserdProtocol(IRC):
 
     def _handleCommand(self, command, prefix, params):
         """Like IRC.handleCommand, but with no exception handling"""
-        method = getattr(self, "irc_%s" % command, None)
+        method = getattr(self, "irc_%s" % (command), None)
         if method is not None:
             return method(prefix, params)
         else:

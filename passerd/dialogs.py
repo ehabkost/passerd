@@ -6,6 +6,7 @@ class Dialog:
     def __init__(self, *args, **kwargs):
         self.patterns = []
         self.message_func = None
+        self.parent = kwargs.get('parent', None)
         self.dialog_init(*args, **kwargs)
 
     def set_message_func(self, fn):
@@ -51,6 +52,17 @@ class Dialog:
         return self.message_func(msg)
 
 
+# command "importance", to order help system
+CMD_IMP_IMPORTANT = 0    # important commands
+CMD_IMP_COMMON = 2       # commonly-used commands
+CMD_IMP_INTERESTING = 5  # interesting-to-know commands
+CMD_IMP_UNIMPORTANT = 6  # usual but not important commands
+CMD_IMP_ADVANCED = 8     # advanced commands
+CMD_IMP_DEBUGGING = 8    # debugging/development commands
+
+CMD_IMP_ALIAS = 7
+CMD_IMP_DEFAULT = CMD_IMP_INTERESTING
+
 class CommandDialog(Dialog):
     """A dialog for simple 'command args' commands"""
     def __init__(self, *args, **kwargs):
@@ -79,8 +91,12 @@ class CommandDialog(Dialog):
     def add_command(self, cmd, fn):
         self.commands[cmd.lower()] = fn
 
-    def add_alias(self, alias, cmd):
+    def add_alias(self, alias, cmd, imp=CMD_IMP_ALIAS):
         self.add_command(alias, self._command_fn(cmd))
+        sh = self._short_help(cmd)
+        if sh:
+            setattr(self, 'shorthelp_%s' % (alias.lower()), 'Synonym to %s: %s' % (cmd.upper(), sh))
+            setattr(self, 'importance_%s' % (alias.lower()), imp)
 
     def _command_fn(self, cmd):
         fn = getattr(self, 'command_%s' % (cmd.lower()), None)
@@ -102,11 +118,11 @@ class CommandDialog(Dialog):
         dialog.set_message_func(self.message)
         self._set_subdialog_prefix(cmd, dialog)
         self.add_command(cmd, handle_cmd)
-        setattr(self, 'help_%s' % (cmd), show_help)
+        setattr(self, 'help_%s' % (cmd.lower()), show_help)
         if short_help is None:
             short_help = dialog.get_help_header()
         if short_help:
-            setattr(self, 'shorthelp_%s' % (cmd), short_help)
+            setattr(self, 'shorthelp_%s' % (cmd.lower()), short_help)
 
     def split_args(self, s):
         s = s.lstrip()
@@ -119,7 +135,10 @@ class CommandDialog(Dialog):
         return cmd,args
 
     def _short_help(self, cmd):
-        sh = getattr(self, 'shorthelp_%s' % (cmd.lower()), None)
+        return getattr(self, 'shorthelp_%s' % (cmd.lower()), None)
+
+    def short_help(self, cmd):
+        sh = self._short_help(cmd)
         if sh is None:
             return None
 
@@ -134,7 +153,7 @@ class CommandDialog(Dialog):
         fn = getattr(self, 'help_%s' % (cmd.lower()), None)
         if fn:
             return fn(args)
-        sh = self._short_help(cmd)
+        sh = self.short_help(cmd)
         if sh:
             self.message(sh)
             return
@@ -148,6 +167,23 @@ class CommandDialog(Dialog):
         if h:
             self.message(h)
 
+    def _topic_importance(self, t):
+        r = getattr(self, 'importance_%s' % (t.lower()), None)
+        if r is None:
+            return CMD_IMP_DEFAULT
+        else:
+            return r
+
+    def help_topics(self):
+        r = []
+        for a in dir(self):
+            if a.startswith('shorthelp_'):
+                _,t = a.split('_',1)
+                imp = self._topic_importance(t)
+                r.append( (imp, t) )
+        r.sort()
+        return r
+
     def show_help(self, prefix, args):
         if args:
             cmd,rest = self.split_args(args)
@@ -155,34 +191,47 @@ class CommandDialog(Dialog):
 
         topics = []
         commands = []
-        for a in dir(self):
-            if a.startswith('shorthelp_'):
-                _,t = a.split('_',1)
-                if self._command_fn(t):
-                    commands.append(t)
-                else:
-                    topics.append(t)
-        topics.sort()
-        commands.sort()
+        for imp,t in self.help_topics():
+            if self._command_fn(t):
+                commands.append( (imp,t) )
+            else:
+                topics.append( (imp,t) )
 
         self.show_help_header(args)
         if commands:
-            self.message('%sAvailable commands:' % (prefix))
-            for c in commands:
-                self.message(self._short_help(c))
+            main = []
+            rest = []
+            for imp,c in commands:
+                if imp <= CMD_IMP_INTERESTING:
+                    main.append(c)
+                else:
+                    rest.append(c)
+            if main:
+                self.message('%sAvailable commands:' % (prefix))
+                for c in main:
+                    self.message(self.short_help(c))
+            if rest:
+                if main: name='Other commands'
+                else: name='Available commands'
+                pref = self.cmd_prefix
+                clist = ' '.join(['%s%s' % (pref,c.upper()) for c in rest])
+                self.message("%s: %s" % (name, clist))
         if topics:
             self.message('Other help topics:' % (prefix))
             for t in topics:
-                self.message(self._short_help(t))
+                self.message(self.short_help(t))
         self.show_help_footer(args)
 
     def show_help_footer(self, args):
         pass
 
-    def cmd_syntax(self, cmd, args):
+    def cmd_syntax_str(self, cmd, args):
         if args: suffix = ' %s' % (args)
         else: suffix = ''
-        self.message('Usage: %s%s%s' % (self.cmd_prefix, cmd.upper(), suffix))
+        return 'Usage: %s%s%s' % (self.cmd_prefix, cmd.upper(), suffix)
+
+    def cmd_syntax(self, cmd, args):
+        self.message(self.cmd_syntax_str(cmd, args))
 
     def help_help(self, args):
         self.cmd_syntax('help', 'command-or-topic')
@@ -207,6 +256,7 @@ class CommandDialog(Dialog):
 
 class CommandHelpMixin:
     shorthelp_help = 'Show help'
+    importance_help = CMD_IMP_UNIMPORTANT
 
 
 def attach_dialog_to_channel(dialog, chan, bot_user):
