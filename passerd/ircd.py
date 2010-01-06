@@ -603,7 +603,15 @@ class TwitterChannel(IrcChannel):
         if msg.startswith('!'):
             return self.commandReceived(msg[1:])
 
-        self.do_send_twitter_post(msg)
+        # careful mode?
+        if not self.proto.user_cfg_var_b('careful'):
+            # simply post directly
+            self.do_send_twitter_post(msg)
+        else:
+            # careful mode: check if it's a valid command
+            r,_ = self.cmd_dialog.try_msg(msg)
+            if not r:
+                self.bot_msg("I Can't Hear You! Use !tw to post, or disable careful mode using `!be brave`")
 
     def ctcp_ACTION(self, arg):
         dbg("ACTION: %r" % (arg))
@@ -885,13 +893,31 @@ class BeCommands(ProtoDialog, CommandDialog):
     def unknown_command(self, cmd, args):
         self.message('Be what?')
 
+    shorthelp_careful = "Don't post channel messages to Twitter directly"
+    def command_careful(self, args):
+        self.message('I will. From now on Twitter updates can '
+                      'only be sent with `%stw <message>`' % (self.parent.cmd_prefix))
+        self.message('You can disable this setting using: `%sbe brave`' % (self.parent.cmd_prefix))
+        self.proto.set_user_cfg_var('careful', True)
+
+    shorthelp_brave = "Post channel messages to Twitter directly"
+    def command_brave(self, args):
+        self.message('So you are! Channel messages will be posted directly to Twitter')
+        self.proto.set_user_cfg_var('careful', False)
+
+    def show_help(self, prefix, args):
+        self.message(self.parent.cmd_syntax_str('be', '<flag>'))
+        self.message("Available flags:")
+        for imp,t in self.help_topics():
+            self.message(" %s - %s" % (t, self._short_help(t)))
+
 
 class PasserdCommands(CommandHelpMixin, CommandDialog):
     def dialog_init(self, proto, chan=None, *args, **kwargs):
         self.proto = proto
         self.chan = chan
-        self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
-        self.add_subdialog('be',  BeCommands(proto))
+        #self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
+        self.add_subdialog('be',  BeCommands(proto, parent=self))
 
         self.add_alias('s',   'post')
         self.add_alias('twit',   'post')
@@ -1260,11 +1286,36 @@ class PasserdProtocol(IRC):
         IRC.connectionLost(self, reason)
 
     def user_var(self, var):
+        """Get any user var (config or internal feed state)"""
         return self.data.get_var(self.user_data, var)
 
     def set_user_var(self, var, value):
         return self.data.set_var(self.user_data, var, value)
 
+    def set_user_cfg_var(self, var, value):
+        """Set an user variable
+
+        Note that all vars are strings, and other types
+        are converted before setting the variables.
+        """
+
+        # convert some data types to string
+        t = type(value)
+        if t is bool:
+            if value: value = '1'
+            else: value = '0'
+
+        vname = 'config:%s' % (var)
+        return self.set_user_var(vname, value)
+
+    def user_cfg_var_b(self, var):
+        vname = 'config:%s' % (var)
+        v = self.user_var(vname)
+        true_values = ['true', 't', '1', 'y', 'yes']
+        if v and v in true_values:
+            return True
+        else:
+            return False
 
     def get_twitter_user(self, id, watch=False):
         u = self.twitter_users.get_user(id)
