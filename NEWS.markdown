@@ -3,7 +3,12 @@
   solution until a true rate-limit-adjusting scheduler is written
 * Unify `passerd-bot` commands and implementation of `!command` on `#twitter`
   * Including a help system
-* Add a '!post' command (aliases: '!tw', '!twit', '!update')
+* Add a `!post` command (aliases: `!tw`, `!twit`, `!update`)
+* Paranoid mode: if you are afraid of posting by mistake when typing on
+  your IRC client, you can enable a "paranoid" mode using the `!be paranoid`
+  command.
+  When in this mode, you can only post to twitter using `!post` (or the aliases
+  above)
 
 
 ### Passerd 0.0.4.2 - 28 Dec 2009
