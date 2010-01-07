@@ -443,7 +443,7 @@ class TwitterIrcUserCache:
             self.fetch_all_friend_info(user, unknown_users)
 
 
-REPLY_RE = re.compile(r'(@?)([a-zA-Z_]+)([:, ])')
+REPLY_RE = re.compile(r'(@?)([a-zA-Z0-9_]+)([:, ])')
 
 class TwitterChannel(IrcChannel):
     def __init__(self, proto, name):

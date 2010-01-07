@@ -8,6 +8,7 @@
   even if many feeds are being followed at the same time (not taking the
   channel-join-time and login-time requests into account, though).
 
+* Fix auto-`@` of nickname replies when nicknames have digits on it
 
 ### Passerd 0.0.5 - 6 Jan 2010
 
