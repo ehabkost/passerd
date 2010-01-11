@@ -50,6 +50,8 @@ You can type some special commands on the IRC channel:
 * `!` - force the Twitter timeline to be fetched imeediately
 * `!!` - force the Twitter timeline to be fetched, _including older posts_
 * `!rate` - query the Twitter API rate limit stats
+* `!be paranoid` - enable "paranoid mode", to avoid accidentaly posting to Twitter
+* `!help` or `/msg passerd-bot help` - Show help and other commands
 
 
 I need help!
