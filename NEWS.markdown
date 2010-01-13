@@ -10,6 +10,10 @@
 
 * Fix auto-`@` of nickname replies when nicknames have digits on it
 
+* Set timeout on API calls to avoid getting stuck if HTTP requests take too
+  long to reply
+
+
 ### Passerd 0.0.5 - 6 Jan 2010
 
 * Don't continue refreshing feeds if rate-limit is hit. This is a temporary
