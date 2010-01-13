@@ -476,18 +476,26 @@ class TwitterChannel(IrcChannel):
 
     def printEntry(self, entry):
         e = entry
+        is_rt = False
         if entry.retweeted_status:
             e = entry.retweeted_status
+            is_rt = True
             dbg("Retweet! RT ID: %r", entry.id)
         u = self.proto.get_twitter_user(e.user.id)
         dbg("entry id: %r", e.id)
         text = e.text
         dbg('entry text: %r' % (text))
 
-        #TODO: what's the best way to format RTs?
+        if is_rt:
+            rt_inline = self.proto.user_cfg_var_b('rt_inline')
+            if rt_inline:
+                #TODO: make RT inline format configurable
+                text = '%s \x02[RT by @%s]\x02' % (text, entry.user.screen_name)
+
         self.proto.send_text(u, self, text)
-        if entry.retweeted_status:
-            self.bot_msg("(%s retweeted by %s)" % (e.user.screen_name, entry.user.screen_name))
+        if is_rt:
+            if not rt_inline:
+                self.bot_msg("(%s retweeted by %s)" % (e.user.screen_name, entry.user.screen_name))
 
     def _drop_one_old_entry(self):
         #FIXME: Claudio reported a memory leak, I think it's here.
@@ -939,6 +947,18 @@ class BeCommands(CommandDialog):
         self.message('So you are! Channel messages will be posted directly to Twitter')
         self.proto.set_user_cfg_var('careful', False)
 
+    shorthelp_concise = "Show every post as a single IRC message"
+    def command_concise(self, args):
+        self.message("OK. I know I talk too much")
+        self.proto.set_user_cfg_var('rt_inline', True)
+        self.proto.set_user_cfg_var('multiline', False)
+
+    shorthelp_verbose = "Show multi-line posts as multiple lines, and RT info as additional passerd-bot messages"
+    def command_verbose(self, args):
+        self.message("Thanks. I like to talk, you know  :)")
+        self.proto.set_user_cfg_var('rt_inline', False)
+        self.proto.set_user_cfg_var('multiline', True)
+
     def show_help(self, prefix, args):
         self.message(self.parent.cmd_syntax_str('be', '<flag>'))
         self.message("Available flags:")
@@ -1312,16 +1332,23 @@ class PasserdProtocol(IRC):
         dbg('entities decoded: %r' % (text))
         text = text.replace('\r', '\n')
 
-        first = True
-        # handle newlines as multiple messages
-        for line in text.split('\n'):
-            if not line:
-                continue
-            if not first:
-                #TODO: find a better way to indicate multi-line posts
-                line = '[...] '+line
-            self.send_privmsg(sender, target, line.encode(IRC_ENCODING))
-            first = False
+        lines = []
+        if self.user_cfg_var_b('multiline'):
+            first = True
+            # handle newlines as multiple messages
+            for line in text.split('\n'):
+                if not line:
+                    continue
+                if not first:
+                    #TODO: find a better way to indicate multi-line posts
+                    line = '[...] '+line
+                lines.append(line.encode(IRC_ENCODING))
+                first = False
+        else:
+            lines = [text.replace('\n', ' ')]
+
+        for l in lines:
+            self.send_privmsg(sender, target, l)
 
     def connectionLost(self, reason):
         pinfo("connection to %s lost: %s", self.hostname, reason.value)
@@ -1351,9 +1378,12 @@ class PasserdProtocol(IRC):
         vname = 'config:%s' % (var)
         return self.set_user_var(vname, value)
 
-    def user_cfg_var_b(self, var):
+    def user_cfg_var(self, var):
         vname = 'config:%s' % (var)
-        v = self.user_var(vname)
+        return self.user_var(vname)
+
+    def user_cfg_var_b(self, var):
+        v = self.user_cfg_var(var)
         true_values = ['true', 't', '1', 'y', 'yes']
         if v and v in true_values:
             return True
