@@ -13,6 +13,9 @@
 * Set timeout on API calls to avoid getting stuck if HTTP requests take too
   long to reply
 
+* Retweets are shown as messages from the original poster, with a note
+  by passerd-bot
+
 
 ### Passerd 0.0.5 - 6 Jan 2010
 

@@ -475,11 +475,19 @@ class TwitterChannel(IrcChannel):
         return ''
 
     def printEntry(self, entry):
-        u = self.proto.get_twitter_user(entry.user.id)
-        dbg("entry id: %r" % (entry.id))
-        text = entry.text
+        e = entry
+        if entry.retweeted_status:
+            e = entry.retweeted_status
+            dbg("Retweet! RT ID: %r", entry.id)
+        u = self.proto.get_twitter_user(e.user.id)
+        dbg("entry id: %r", e.id)
+        text = e.text
         dbg('entry text: %r' % (text))
+
+        #TODO: what's the best way to format RTs?
         self.proto.send_text(u, self, text)
+        if entry.retweeted_status:
+            self.bot_msg("(%s retweeted by %s)" % (e.user.screen_name, entry.user.screen_name))
 
     def _drop_one_old_entry(self):
         #FIXME: Claudio reported a memory leak, I think it's here.
@@ -532,11 +540,16 @@ class TwitterChannel(IrcChannel):
             return None
         return int(r.id)
 
-    def got_entry(self, e):
-        dbg("#twitter got_entry. id: %s", e.id)
+    def cache_entry(self, e):
         u = e.user
         self.proto.global_twuser_cache.got_api_user_info(u)
         self._add_to_history(e)
+
+    def got_entry(self, e):
+        dbg("#twitter got_entry. id: %s", e.id)
+        self.cache_entry(e)
+        if e.retweeted_status:
+            self.cache_entry(e.retweeted_status)
         self.printEntry(e)
 
     def bot_msg(self, msg):
