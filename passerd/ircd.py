@@ -1576,7 +1576,7 @@ class PasserdProtocol(IRC):
 
     def _twitter_api(self, *args, **kwargs):
         """Create a Twitter API object"""
-        api = Twitter(*args, **kwargs)
+        api = Twitter(*args, timeout=self.factory.opts.api_timeout, **kwargs)
         #FIXME; patch twitty-twister to accept agent=foobar
         api.agent = MYAGENT
         return api
@@ -1854,8 +1854,9 @@ class PasserdProtocol(IRC):
 class PasserdFactory(Factory):
     protocol = PasserdProtocol
 
-    def __init__(self, dbpath):
-        url = 'sqlite:///%s' % (dbpath)
+    def __init__(self, opts):
+        url = 'sqlite:///%s' % (opts.database)
+        self.opts = opts
         self.data = DataStore(url)
         self.data.create_tables()
         self.global_twuser_cache = TwitterUserCache(self)
@@ -1878,6 +1879,8 @@ class PasserdGlobalOptions:
                           ('passerd.feeds',logging.DEBUG),
                           ('passerd.scheduler',logging.DEBUG)]
         self.logformat = '%(asctime)s:%(levelname)s:%(name)s:%(message)s'
+
+        self.api_timeout = 60
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -1928,7 +1931,7 @@ def run():
 
     pinfo("Starting Passerd. Will listen on address %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
-             factory=PasserdFactory(opts.database))
+             factory=PasserdFactory(opts))
     pinfo("Starting Twisted reactor loop.")
     reactor.run()
 
