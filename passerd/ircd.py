@@ -915,11 +915,77 @@ class ProtoDialog:
         self.proto = proto
 
 
+class ConfigInfo:
+    """Just a namespace for definitions of configuration options
+    """
+    OPTIONS = set('rt_inline multiline careful'.split())
+
+    help_rt_inline = 'Show inline "[RT by @user]" info on Retweets'
+    help_multiline = 'Show multi-line posts as multiple IRC messages'
+    help_careful = "Don't post non-command channel messages to Twitter directly"
+
+    @classmethod
+    def all_opts(klass):
+        return list(klass.OPTIONS)
+
+    @classmethod
+    def has_opt(klass, o):
+        return o in klass.OPTIONS
+
+    @classmethod
+    def opt_help(klass, o):
+        return getattr(klass, 'help_%s' % (o), None)
+
+
 class ConfigCommands(ProtoDialog, CommandDialog):
     shorthelp_set = 'Change a config option'
+    def help_set(self, args):
+        self.cmd_syntax('set', 'option value')
     def command_set(self, args):
-        #FIXME: implement me
-        self.message('Sorry, this is not implemented yet')
+        opt,value = self.split_args(args)
+        if not value:
+            self.help_set(None)
+            return
+
+        if not ConfigInfo.has_opt(opt):
+            self.message("Invalid option name: %r" % (opt))
+            return
+
+
+        self.proto.set_user_cfg_var(opt, value)
+        self.message(u'Option %s set to: %s' % (opt, value))
+
+    shorthelp_show = 'Show the value of a config option'
+    def command_show(self, args):
+        if not args:
+            return self.command_list(args)
+
+        opt = args
+        if not ConfigInfo.has_opt(opt):
+            self.message("Invalid option name: %r" % (opt))
+            return
+
+        value = self.proto.user_cfg_var(opt)
+        if value is None:
+            self.message(u'Option %s is unset' % (opt))
+        else:
+            self.message(u'Option %s is set to: %s' % (opt, value))
+
+    shorthelp_list = 'List all configuration variables'
+    def command_list(self, args):
+        self.message('%-10s %s' % ('Option', 'Value'))
+        for o in ConfigInfo.all_opts():
+            v = self.proto.user_cfg_var(o)
+            if v is None:
+                v = '-'
+            self.message(u'%-10s %s' % (o, v))
+
+    def show_help(self, prefix, args):
+        CommandDialog.show_help(self, prefix, args)
+        self.message('%-10s %s' % ('Option', 'Description'))
+        for o in ConfigInfo.all_opts():
+            self.message('%-10s %s' % (o, ConfigInfo.opt_help(o)))
+
 
 
 class BeCommands(CommandDialog):
@@ -970,7 +1036,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
     def dialog_init(self, proto, chan=None, *args, **kwargs):
         self.proto = proto
         self.chan = chan
-        #self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
+        self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
         self.add_subdialog('be',  BeCommands(proto, parent=self))
 
         self.add_alias('s',   'post')
