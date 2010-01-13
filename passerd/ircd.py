@@ -27,6 +27,7 @@
 import sys, logging, time, re, random
 import gc
 import optparse
+import rfc822 # for date/time parsing
 
 from twisted.words.protocols import irc
 from twisted.words.protocols.irc import IRC
@@ -504,7 +505,7 @@ class TwitterChannel(IrcChannel):
         uid = int(e.user.id)
         self.recent_by_user.setdefault(uid, []).append(e)
 
-    def last_post_id(self, nick):
+    def recent_post(self, nick, substring=None, min_age=None):
         u = self.proto.global_twuser_cache.lookup_screen_name(nick)
         if u is None:
             # nickname not found
@@ -513,7 +514,23 @@ class TwitterChannel(IrcChannel):
         recent = self.recent_by_user.get(uid, [])
         if len(recent) < 1:
             return None
-        return int(recent[-1].id)
+        r = recent[-1]
+
+        if min_age:
+            #FIXME: add date parsing support to twitty-twister
+            #FIXME: show a list of alternatives to the user
+            #       (how to do that for replies?)
+            t = rfc822.mktime_tz(rfc822.parsedate_tz(r.created_at))
+            if t > time.time() - min_age:
+                raise Exception("latest post by %s is too recent" % (nick))
+
+        return r
+
+    def last_post_id(self, nick):
+        r = self.recent_post(nick)
+        if r is None:
+            return None
+        return int(r.id)
 
     def got_entry(self, e):
         dbg("#twitter got_entry. id: %s", e.id)
@@ -620,7 +637,7 @@ class TwitterChannel(IrcChannel):
 
     def do_send_twitter_post(self, msg):
         def doit():
-            return self.send_twitter_post(msg).addCallback(done).addErrback(error)
+            return self.send_twitter_post(msg)
 
         def done(*args):
             #FIXME: remove this notice once we update the channel topic. we don't need it.
@@ -633,7 +650,7 @@ class TwitterChannel(IrcChannel):
                 return
             self.bot_msg("%s: error while posting: %s" % (self.proto.the_user.nick, e.value))
 
-        return doit()
+        return defer.maybeDeferred(doit).addCallback(done).addErrback(error)
 
     def _add_in_reply_to(self, msg, args):
         m = REPLY_RE.match(msg)
@@ -993,7 +1010,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
                 d = ch.send_twitter_post(args)
             else:
                 d = self.proto.send_twitter_post(args)
-            d.addCallback(done).addErrback(error)
+            return d
 
         def done(*args):
             self.message("Done. Twitter update posted")
@@ -1001,7 +1018,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         def error(e):
             self.message("Error while posting: %s" % (e.value))
 
-        doit()
+        return defer.maybeDeferred(doit).addCallback(done).addErrback(error)
 
 
 
