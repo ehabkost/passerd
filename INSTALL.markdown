@@ -11,6 +11,13 @@ Python modules:
 * A patched version of twitty-twister -- but don't worry: it is automatically fetched by `git submodule` and `./run.sh` (see run instructions below)
 
 
+Optional dependencies:
+
+* For running Passerd in _daemon_ mode:
+  * [python-daemon](http://pypi.python.org/pypi/python-daemon/)
+  * Python [lockfile](http://pypi.python.org/pypi/lockfile/) module
+
+
 Below you'll find instructions to easily get the dependencies on some operating
 systems:
 
@@ -19,6 +26,10 @@ systems:
 To install the dependencies on a Fedora machine, run:
 
 	yum install python-twisted python-twisted-words python-sqlalchemy python-oauth
+
+For the optional packages:
+
+	yum install python-daemon python-lockfile
 
 
 ### On Mandriva

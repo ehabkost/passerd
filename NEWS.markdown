@@ -1,26 +1,17 @@
 ### Current development version:
 
-* Add a simple scheduling algorithm that will make sure Passerd don't
-  kill the Twitter API rate-limit if the user joins too many Passerd
-  channels.
-
-  With this in place, Passerd will never make more than 80 requests per hour,
-  even if many feeds are being followed at the same time (not taking the
-  channel-join-time and login-time requests into account, though).
-
+* Add a simple scheduling algorithm that will make sure Passerd don't kill the
+  Twitter API rate-limit if the user joins too many Passerd channels.
 * Fix auto-`@` of nickname replies when nicknames have digits on it
-
 * Set timeout on API calls to avoid getting stuck if HTTP requests take too
   long to reply
-
 * Retweets are shown as messages from the original poster, with a note
   by passerd-bot
   (configurable by "!be concise" option)
-
 * Multi-line tweets aren't shown as multiple lines anymore
   (configurable by "!be verbose" option)
-
 * Lower-level "!config" command to set specific configuration variables
+* Support for running Passerd in _daemon_ mode
 
 
 ### Passerd 0.0.5 - 6 Jan 2010
