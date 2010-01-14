@@ -1146,8 +1146,8 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
     #TODO: add 'needs_chan' decorator
 
-    shorthelp_recent = "Test the recent-post matching code"
-    importance_gc = dialogs.CMD_IMP_DEBUGGING
+    shorthelp_recent = "Debug the recent-post matching code"
+    importance_recent = dialogs.CMD_IMP_DEBUGGING
     def command_recent(self, args):
         nick,substring = self.split_args(args)
         try:
