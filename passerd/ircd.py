@@ -955,10 +955,18 @@ class ConfigCommands(ProtoDialog, CommandDialog):
         self.proto.set_user_cfg_var(opt, value)
         self.message(u'Option %s set to: %s' % (opt, value))
 
+    def show_all(self):
+        self.message('%-10s %s' % ('Option', 'Value'))
+        for o in ConfigInfo.all_opts():
+            v = self.proto.user_cfg_var(o)
+            if v is None:
+                v = '-'
+            self.message(u'%-10s %s' % (o, v))
+
     shorthelp_show = 'Show the value of a config option'
     def command_show(self, args):
         if not args:
-            return self.command_list(args)
+            return self.show_all()
 
         opt = args
         if not ConfigInfo.has_opt(opt):
@@ -970,15 +978,6 @@ class ConfigCommands(ProtoDialog, CommandDialog):
             self.message(u'Option %s is unset' % (opt))
         else:
             self.message(u'Option %s is set to: %s' % (opt, value))
-
-    shorthelp_list = 'List all configuration variables'
-    def command_list(self, args):
-        self.message('%-10s %s' % ('Option', 'Value'))
-        for o in ConfigInfo.all_opts():
-            v = self.proto.user_cfg_var(o)
-            if v is None:
-                v = '-'
-            self.message(u'%-10s %s' % (o, v))
 
     def show_help(self, prefix, args):
         CommandDialog.show_help(self, prefix, args)
