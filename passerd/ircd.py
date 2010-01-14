@@ -51,7 +51,7 @@ from passerd.poauth import OAuthClient, oauth_consumer
 import oauth.oauth as oauth
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
-
+from sqlalchemy.sql.expression import func
 
 
 # client/user-agent info:
@@ -223,7 +223,7 @@ class TwitterUserCache:
     def lookup_screen_name(self, name):
         # not 
         try:
-            u = self.proto.data.query(TwitterUserData).filter_by(twitter_screen_name=name).one()
+            u = self.proto.data.query(TwitterUserData).filter(func.lower(TwitterUserData.twitter_screen_name)==name.lower()).one()
         except MultipleResultsFound:
             # multiple matches are possible if screen_names are reused.
             # if that happens, be on the safe side: don't return anything
