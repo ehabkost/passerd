@@ -23,8 +23,8 @@ def undo_xss_escaping(s):
 def full_entity_decode(s):
     """Undo the stupid entity encoding done by Twitter
 
-    '>' and '<' are entity-encoded twice!
+    Data is entity-encoded twice!
     """
-    return undo_xss_escaping(htmlentitydecode(s))
+    return htmlentitydecode(htmlentitydecode(s))
 
 __all__ = ["htmlentitydecode", "undo_xss_escaping", "full_entity_decode"]
