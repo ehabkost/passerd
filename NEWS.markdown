@@ -7,11 +7,12 @@
   long to reply
 * Retweets are shown as messages from the original poster, with a note
   by passerd-bot
-  (configurable by "!be concise" option)
+  (configurable by `!be concise` option)
 * Multi-line tweets aren't shown as multiple lines anymore
-  (configurable by "!be verbose" option)
-* Lower-level "!config" command to set specific configuration variables
+  (configurable by `!be verbose` option)
+* Lower-level `!config` command to set specific configuration variables
 * Support for running Passerd in _daemon_ mode
+* Retweet support using `!rt` command
 
 
 ### Passerd 0.0.5 - 6 Jan 2010
