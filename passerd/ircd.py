@@ -2009,6 +2009,7 @@ class PasserdGlobalOptions:
         self.api_timeout = 60
 
         self.daemon_mode = False
+        self.pidfile = None
 
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
@@ -2040,6 +2041,9 @@ def parse_cmdline(args, opts):
     parser.add_option("-L", "--log-file",
             metavar="FILENAME", type="string",
             action="callback", callback=open_logfile)
+    parser.add_option("-p", "--pid-file",
+            metavar="FILENAME", type="string",
+            dest="pidfile")
     _, args = parser.parse_args(args, opts)
     if not args:
         parser.error("the database path is needed!")
@@ -2078,12 +2082,20 @@ def run():
     if opts.logstream:
         preserve.append(opts.logstream)
 
+    pidfile = None
+    if opts.pidfile:
+        try:
+            import lockfile
+        except ImportError:
+            raise Exception("You need the Python lockfile module, to set a pidfile")
+        pidfile = lockfile.FileLock(opts.pidfile)
+
     if opts.daemon_mode:
         try:
             import daemon
         except ImportError:
-            raise Exception("You need the python-daemon module to run Passerd on daemon mode")
-        with daemon.DaemonContext(files_preserve=preserve):
+            raise Exception("You need the python-daemon module, to run Passerd on daemon mode")
+        with daemon.DaemonContext(files_preserve=preserve, pidfile=pidfile):
             try:
                 _run(opts)
             except Exception,e:
