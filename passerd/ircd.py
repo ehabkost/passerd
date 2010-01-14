@@ -102,6 +102,10 @@ MAX_USER_INFO_FETCH = 0  # individual fetch is not implemented yet...
 MAX_FRIEND_PAGE_REQS = 10
 
 
+# minimum post age (in seconds) to allow it to be used for RTs.
+# useful to avoid surprises when using the !RT command
+#TODO: make this configurable
+MIN_LATEST_POST_AGE = 2
 
 
 
@@ -524,21 +528,43 @@ class TwitterChannel(IrcChannel):
     def recent_post(self, nick, substring=None, min_age=None):
         u = self.proto.global_twuser_cache.lookup_screen_name(nick)
         if u is None:
+            dbg("nickname %s not found", nick)
             # nickname not found
             return None
         uid = u.twitter_id
         recent = self.recent_by_user.get(uid, [])
         if len(recent) < 1:
+            dbg("no posts by uid %s", uid)
             return None
-        r = recent[-1]
 
-        if min_age:
-            #FIXME: add date parsing support to twitty-twister
-            #FIXME: show a list of alternatives to the user
-            #       (how to do that for replies?)
-            t = rfc822.mktime_tz(rfc822.parsedate_tz(r.created_at))
-            if t > time.time() - min_age:
-                raise Exception("latest post by %s is too recent" % (nick))
+
+        if substring:
+            matches = []
+            i = 1
+            while i <= len(recent):
+                r = recent[-i]
+                #TODO: make it more flexible, ignoring punctuation and spaces
+                if substring.lower() in r.text.lower():
+                    matches.append(r)
+                i += 1
+
+            if not matches:
+                return None
+
+            if len(matches) > 1:
+                raise Exception("Multiple matches for [%s] on posts by %s" % (substring, nick))
+
+            # yay, single match:
+            r = matches[0]
+        else:
+            r = recent[-1]
+            if min_age:
+                #FIXME: add date parsing support to twitty-twister
+                #FIXME: show a list of alternatives to the user
+                #       (how to do that for replies?)
+                t = rfc822.mktime_tz(rfc822.parsedate_tz(r.created_at))
+                if t > time.time() - min_age:
+                    raise Exception("latest post by %s is too recent, I don't know if it's the one you want. Use words from the text to identify it" % (nick))
 
         return r
 
@@ -1118,8 +1144,61 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
         return defer.maybeDeferred(doit).addCallback(done).addErrback(error)
 
+    #TODO: add 'needs_chan' decorator
 
+    shorthelp_recent = "Test the recent-post matching code"
+    importance_gc = dialogs.CMD_IMP_DEBUGGING
+    def command_recent(self, args):
+        nick,substring = self.split_args(args)
+        try:
+            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
+        except Exception,e:
+            self.message("error: %s" % (e))
+            return
 
+        if r:
+            self.message("match: id: %r. text: %r" % (r.id, r.text))
+        else:
+            self.message("no match...")
+
+    #TODO: add 'needs_chan' decorator
+    shorthelp_recent = "Retweet a post"
+    importance_gc = dialogs.CMD_IMP_COMMON
+    def help_rt(self, args):
+        self.cmd_syntax('rt', 'nick [part of post text]')
+    def command_rt(self, args):
+        if not self.chan:
+            self.message("The RT command only works in a channel")
+            return
+
+        nick,substring = self.split_args(args)
+        try:
+            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
+        except Exception,e:
+            self.message("error: %s" % (e))
+            return
+
+        if not r:
+            if substring:
+                self.message("no match for [%s] on posts by %s" % (substring, nick))
+            else:
+                self.message("no posts from %s" % (nick))
+            return
+
+        data = []
+        def got_it(e):
+            r = e.retweeted_status
+            data.append(r)
+            self.message("Retweeted: <%s> %s" % (r.user.screen_name, r.text))
+
+        def done(*args):
+            if not data:
+                self.message("Unexpected error: no RT data returned by the Twitter server")
+
+        def error(e):
+            self.message("Error while retweeting: %s" % (e.value))
+
+        self.proto.api.retweet(str(r.id), got_it).addCallback(done).addErrback(error)
 
 
 class PasserdBot(IrcUser):
