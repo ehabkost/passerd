@@ -1213,6 +1213,7 @@ class NewUserDialog(ProtoDialog, Dialog):
             bm("2) Twitter password: Just use your Twitter password when connecting to Passerd")
             bm("Which option do you want to use? (twitter/local)")
             self.wait_for(r'^ *loc|^ *1 *$', setup_password)
+            #FIXME: clear password field if Twitter password option is chosen
             self.wait_for(r'^ *twi|^ *2 *$', all_set)
 
         def all_set(msg,m):
