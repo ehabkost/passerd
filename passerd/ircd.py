@@ -1597,9 +1597,15 @@ class PasserdProtocol(IRC):
         self.send_notice(self.my_irc_server, target, msg)
 
     def send_notice(self, sender, target, msg):
+        if '\r' in msg or '\n' in msg: # just in case
+            logger.error("Oops! newlines on channel notice: %r", msg)
+            msg = msg.replace('\r',' ').replace('\n', ' ')
         self.send_message(sender, 'NOTICE', target.target_name(), ':%s' % (to_str(msg, IRC_ENCODING)))
 
     def send_privmsg(self, sender, target, msg):
+        if '\r' in msg or '\n' in msg: # just in case
+            logger.error("Oops! newlines on channel privmsg: %r", msg)
+            msg = msg.replace('\r',' ').replace('\n', ' ')
         self.send_message(sender, 'PRIVMSG', target.target_name(), ':%s' % (to_str(msg, IRC_ENCODING)))
 
     def notice(self, msg):
