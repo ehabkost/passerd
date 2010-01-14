@@ -1,6 +1,6 @@
 import unittest, doctest
 
-modules = 'dialogs'.split()
+modules = 'dialogs formatting'.split()
 docmodules = []
 
 def suite():

@@ -1407,7 +1407,7 @@ class PasserdProtocol(IRC):
                 if not first:
                     #TODO: find a better way to indicate multi-line posts
                     line = '[...] '+line
-                lines.append(line.encode(IRC_ENCODING))
+                lines.append(line)
                 first = False
         else:
             lines = [text.replace('\n', ' ')]
