@@ -1449,7 +1449,7 @@ class PasserdProtocol(IRC):
 
     def user_cfg_var_b(self, var):
         v = self.user_cfg_var(var)
-        true_values = ['true', 't', '1', 'y', 'yes']
+        true_values = ['true', 't', '1', 'y', 'yes', 'on']
         if v and v in true_values:
             return True
         else:
