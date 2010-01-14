@@ -1189,8 +1189,9 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         def got_it(e):
             r = e.retweeted_status
             data.append(r)
-            self.message("Retweeted: <%s> %s" % (r.user.screen_name, r.text))
-
+            #FIXME: create a escape_post() function
+            t = full_entity_decode(r.text).replace('\n', ' ').replace('\r', ' ')
+            self.message("Retweeted: <%s> %s" % (r.user.screen_name, t))
         def done(*args):
             if not data:
                 self.message("Unexpected error: no RT data returned by the Twitter server")
@@ -1473,6 +1474,7 @@ class PasserdProtocol(IRC):
 
     def send_text(self, sender, target, text):
         # security:
+        #FIXME: create a escape_post() function
         text = full_entity_decode(text)
         dbg('entities decoded: %r' % (text))
         text = text.replace('\r', '\n')
@@ -2037,6 +2039,7 @@ class PasserdProtocol(IRC):
         #FIXME: find a better way to send user information, instead of RPL_AWAY
         #      - maybe just a pointer to a #!userinfo-nickname channel, where this info is available
         def oneline(s):
+            #FIXME: create a escape_post() function
             return full_entity_decode(s).encode(IRC_ENCODING).replace('\n', ' ').replace('\r', ' ')
 
         self.send_reply(irc.RPL_AWAY, u.nick, ':Location: %s' % oneline(tu.location))
