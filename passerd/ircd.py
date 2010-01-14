@@ -2008,6 +2008,8 @@ class PasserdGlobalOptions:
 
         self.api_timeout = 60
 
+        self.daemon_mode = False
+
 def parse_cmdline(args, opts):
     def parse_hostport(option, optstr, value, parser):
         try:
@@ -2020,6 +2022,9 @@ def parse_cmdline(args, opts):
     def set_loglevels(levels):
         opts.loglevels = levels
 
+    def open_logfile(option, optstr, value, parser):
+        opts.logstream = open(value, 'a')
+
     parser = optparse.OptionParser("%prog [options] <database path>")
     parser.add_option("-l", "--listen", type="string",
             action="callback", callback=parse_hostport,
@@ -2030,7 +2035,12 @@ def parse_cmdline(args, opts):
     parser.add_option("--logformat",
             metavar="FORMAT", type="string", default=None,
             help="Set the logging format")
-    _, args = parser.parse_args(args)
+    parser.add_option("-d", "--daemon",
+            action="store_true", dest="daemon_mode")
+    parser.add_option("-L", "--log-file",
+            metavar="FILENAME", type="string",
+            action="callback", callback=open_logfile)
+    _, args = parser.parse_args(args, opts)
     if not args:
         parser.error("the database path is needed!")
     opts.database = args[0]
@@ -2038,27 +2048,47 @@ def parse_cmdline(args, opts):
 
 def setup_logging(opts):
 
-    ch = logging.StreamHandler(opts.logstream)
-    f = logging.Formatter(opts.logformat)
-    ch.setFormatter(f)
-
     # root logger:
     r = logging.getLogger()
-    r.addHandler(ch)
+
+    if opts.logstream:
+        handler = logging.StreamHandler(opts.logstream)
+        f = logging.Formatter(opts.logformat)
+        handler.setFormatter(f)
+        r.addHandler(handler)
 
     for name,level in opts.loglevels:
         logging.getLogger(name).setLevel(level)
 
 
-def run():
-    opts = PasserdGlobalOptions()
-    parse_cmdline(sys.argv[1:], opts)
-    setup_logging(opts)
-
+def _run(opts):
     pinfo("Starting Passerd. Will listen on address %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
              factory=PasserdFactory(opts))
-    pinfo("Starting Twisted reactor loop.")
+    pinfo("Starting Twisted reactor loop")
     reactor.run()
+
+def run():
+    # be careful: avoid opening files before the _run() call. the
+    # daemon module will close it if you don't include it on files_preserve.
+    opts = PasserdGlobalOptions()
+    parse_cmdline(sys.argv[1:], opts)
+    setup_logging(opts)
+    preserve = []
+    if opts.logstream:
+        preserve.append(opts.logstream)
+
+    if opts.daemon_mode:
+        try:
+            import daemon
+        except ImportError:
+            raise Exception("You need the python-daemon module to run Passerd on daemon mode")
+        with daemon.DaemonContext(files_preserve=preserve):
+            try:
+                _run(opts)
+            except Exception,e:
+                logger.exception(e)
+    else:
+        _run(opts)
 
 __all__ = ['run']
