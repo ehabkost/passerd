@@ -1162,10 +1162,12 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             self.message("no match...")
 
     #TODO: add 'needs_chan' decorator
-    shorthelp_recent = "Retweet a post"
-    importance_gc = dialogs.CMD_IMP_COMMON
+    shorthelp_rt = "Retweet a post"
+    importance_rt = dialogs.CMD_IMP_COMMON
     def help_rt(self, args):
         self.cmd_syntax('rt', 'nick [part of post text]')
+        self.message('If no text is specified, the latest post from <nick> is retweeted.')
+        self.message('If text is specified, the post containing the supplied text is retweeted')
     def command_rt(self, args):
         if not self.chan:
             self.message("The RT command only works in a channel")
