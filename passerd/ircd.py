@@ -49,6 +49,7 @@ from passerd.dialogs import Dialog, CommandDialog, CommandHelpMixin, attach_dial
 from passerd.util import try_unicode, to_str
 from passerd.irc import IrcUser, IrcChannel, IrcServer
 from passerd.poauth import OAuthClient, oauth_consumer
+from passerd import version
 import oauth.oauth as oauth
 
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
@@ -58,13 +59,9 @@ from sqlalchemy.sql.expression import func
 # client/user-agent info:
 ####
 
-MYNAME = 'Passerd'
-VERSION = '0.0.5'
-MYAGENT = '%s/%s' % (MYNAME, VERSION)
 #FIXME: use a real hostname?
 MYHOST = 'passerd.server'
-MYURL = 'http://passerd.raisama.net/'
-CLIENT_INFO = TwitterClientInfo(MYNAME, VERSION, MYURL)
+CLIENT_INFO = TwitterClientInfo(version.NAME, version.VERSION, version.URL)
 
 
 # IRC protocol stuff:
@@ -1778,9 +1775,9 @@ class PasserdProtocol(IRC):
     def _send_welcome_replies(self):
         """Send standard IRC numeric replies after registration"""
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))
-        self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, VERSION))
+        self.send_reply(irc.RPL_YOURHOST, ":Your host is %s, running version %s" % (self.myhost, version.VERSION))
         self.send_reply(irc.RPL_CREATED, ":This server was created by the Flying Spaghetti Monster")
-        self.send_reply(irc.RPL_MYINFO, self.myhost, VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
+        self.send_reply(irc.RPL_MYINFO, self.myhost, version.VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
         #TODO: send a MOTD with useful information
 
@@ -1794,7 +1791,7 @@ class PasserdProtocol(IRC):
         """Create a Twitter API object"""
         api = Twitter(*args, timeout=self.factory.opts.api_timeout, **kwargs)
         #FIXME; patch twitty-twister to accept agent=foobar
-        api.agent = MYAGENT
+        api.agent = version.USER_AGENT
         return api
 
     def _check_basic_auth(self, username, password):
