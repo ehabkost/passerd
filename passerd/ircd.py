@@ -24,7 +24,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import sys, logging, time, re, random
+import sys, os, logging, time, re, random
+import fcntl, signal
 import gc
 import optparse
 import rfc822 # for date/time parsing
@@ -2141,7 +2142,6 @@ def parse_cmdline(args, opts):
     return opts
 
 def setup_logging(opts):
-
     # root logger:
     r = logging.getLogger()
 
@@ -2154,42 +2154,66 @@ def setup_logging(opts):
     for name,level in opts.loglevels:
         logging.getLogger(name).setLevel(level)
 
-
 def _run(opts):
     pinfo("Starting Passerd. Will listen on address %s:%d" % opts.listen)
     reactor.listenTCP(interface=opts.listen[0], port=opts.listen[1],
              factory=PasserdFactory(opts))
     pinfo("Starting Twisted reactor loop")
-    reactor.run()
+    try:
+        reactor.run()
+    finally:
+        pinfo("Terminating")
+
+class PidFile:
+    def __init__(self, filename):
+        self.filename = filename
+
+    def __enter__(self):
+        dbg("locking pidfile %s", self.filename)
+        self.file = open(self.filename, 'w')
+        fcntl.lockf(self.file, fcntl.LOCK_EX|fcntl.LOCK_NB)
+        self.file.write('%d\n' % (os.getpid()))
+        self.file.flush()
+
+    def __exit__(self):
+        dbg("unlocking pidfile %s", self.filename)
+        os.unlink(self.filename)
+        fcntl.lockf(self.file, fcntl.LOCK_UN)
+        self.file.close()
+
+
+def run_as_daemon(opts):
+    try:
+        import daemon
+    except ImportError:
+        raise Exception("You need the python-daemon module, to run Passerd on daemon mode")
+
+    pidfile = None
+    if opts.pidfile:
+        pidfile = PidFile(opts.pidfile)
+
+    # I don't want python-daemon to mess with any open file. The files we open
+    # on initialization will be kept, because they are our log files and sockets.
+    # stdin/stdout/stderr will be redirected to /dev/null, so they may be kept open,
+    # too.
+    preserve = range(MAXFD)
+    try:
+        with daemon.DaemonContext(files_preserve=preserve, pidfile=pidfile):
+            _run(opts)
+    except Exception,e:
+        logger.exception(e)
+
+MAXFD = 2048
 
 def run():
     # be careful: avoid opening files before the _run() call. the
     # daemon module will close it if you don't include it on files_preserve.
     opts = PasserdGlobalOptions()
     parse_cmdline(sys.argv[1:], opts)
+
     setup_logging(opts)
-    preserve = []
-    if opts.logstream:
-        preserve.append(opts.logstream)
-
-    pidfile = None
-    if opts.pidfile:
-        try:
-            import lockfile
-        except ImportError:
-            raise Exception("You need the Python lockfile module, to set a pidfile")
-        pidfile = lockfile.FileLock(opts.pidfile)
-
     if opts.daemon_mode:
-        try:
-            import daemon
-        except ImportError:
-            raise Exception("You need the python-daemon module, to run Passerd on daemon mode")
-        with daemon.DaemonContext(files_preserve=preserve, pidfile=pidfile):
-            try:
-                _run(opts)
-            except Exception,e:
-                logger.exception(e)
+        run_as_daemon(opts)
     else:
         _run(opts)
 
