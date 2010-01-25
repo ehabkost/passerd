@@ -1,5 +1,7 @@
 ### Current development version:
 
+### Passerd 0.1.0 - 24 Jan 2010
+
 * Add a simple scheduling algorithm that will make sure Passerd don't kill the
   Twitter API rate-limit if the user joins too many Passerd channels.
 * Fix auto-`@` of nickname replies when nicknames have digits on it
