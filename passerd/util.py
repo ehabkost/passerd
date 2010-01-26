@@ -1,5 +1,5 @@
 
-ENCODINGS = ['utf-8', 'iso-8859-1']
+ENCODINGS = ['utf-8', 'windows-1252']
 
 def hooks(fn):
     """Decorator that call beforeFoo() and afterFoo() methods if available"""
