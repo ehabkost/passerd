@@ -610,8 +610,8 @@ class TwitterChannel(IrcChannel):
         self.bot_msg('Ouch, the limit of requests per hour has been '
                 'reached. I will wait until %s to start checking the '
                 'Twitter timeline again.' % (reset))
-        self.bot_msg('You still can force the check by sending `!`. Also '
-                'you can check the rate limit by sending `!rate`.')
+        self.bot_msg('You can still try to fetch new tweets using `!`. Also, '
+                'you can check the rate limit using `!rate`.')
         self.proto.scheduler.wait_rate_limit()
 
     def start(self):
