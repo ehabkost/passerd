@@ -1590,7 +1590,7 @@ class PasserdProtocol(IRC):
         return self.server_message(cmd, self.the_user.nick, *params, **kwargs)
 
     def send_message(self, sender, *params):
-        return self.sendMessage(*params, prefix=sender.full_id())
+        return self.sendMessage(prefix=sender.full_id(), *params)
 
     def server_message(self, cmd, *params):
         return self.send_message(self.my_irc_server, cmd, *params)
@@ -1789,7 +1789,7 @@ class PasserdProtocol(IRC):
 
     def _twitter_api(self, *args, **kwargs):
         """Create a Twitter API object"""
-        api = Twitter(*args, timeout=self.factory.opts.api_timeout, **kwargs)
+        api = Twitter(timeout=self.factory.opts.api_timeout, *args, **kwargs)
         #FIXME; patch twitty-twister to accept agent=foobar
         api.agent = version.USER_AGENT
         return api
