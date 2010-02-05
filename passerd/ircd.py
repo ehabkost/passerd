@@ -1306,7 +1306,7 @@ class NewUserDialog(ProtoDialog, Dialog):
             bm("You have two authentication options:")
             bm("1) Local password (recommended): Set a password just for Passerd, then you'll never need to reveal your Twitter password")
             bm("2) Twitter password: Just use your Twitter password when connecting to Passerd")
-            bm("Which option do you want to use? (twitter/local)")
+            bm("Which option do you want to use? (local/twitter)")
             self.wait_for(r'^ *loc|^ *1 *$', setup_password)
             #FIXME: clear password field if Twitter password option is chosen
             self.wait_for(r'^ *twi|^ *2 *$', all_set)
