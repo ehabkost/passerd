@@ -908,7 +908,7 @@ class ListChannel(FriendlistMixIn, TwitterChannel):
                 self.list_name, params=params, page_delegate=page_delegate)
 
 
-class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
+class UserChannel(TwitterChannel):
 
     def __init__(self, proto, user):
         self.user = user
@@ -923,12 +923,22 @@ class UserChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
     def topic(self):
         return "User timeline -- %s" % (self.user)
 
-    def _friendList(self, delegate, params={}, page_delegate=None):
-        #TODO: include the user on the list of channel members, too
-        #      (the user whose timeline is being followed, not the Passerd
-        #      authenticated user)
-        return self.proto.api.friends_ids(delegate, self.user, params=params,
-                page_delegate=page_delegate)
+    def list_members(self):
+        #FIXME: only include the_user if the user really joined the channel
+
+        #FIXME: use a self.proto.get_user()-like function that uses lookup_screen_name
+        #       and return it if info is available (see similar FIXME note on proto.get_user())
+        return [self.proto.the_user, UnknownTwitterUser(self.proto, self.user)]
+
+    #TODO: this was enabled in the past, but it just polluted the channel,
+    #      as we don't see any messages from the people that follow the user.
+    #      This can be enabled again if made configurable/optional
+    #def _friendList(self, delegate, params={}, page_delegate=None):
+    #    #TODO: include the user on the list of channel members, too
+    #    #      (the user whose timeline is being followed, not the Passerd
+    #    #      authenticated user)
+    #    return self.proto.api.friends_ids(delegate, self.user, params=params,
+    #            page_delegate=page_delegate)
 
     def _fetch_user_info(self, users):
         return self.proto.twitter_users.fetch_friend_info(self.user, users)
