@@ -260,7 +260,8 @@ class IrcChannel(IrcTarget):
 
     @hooks
     def userLeft(self, user, reason):
-        self.notifyPart(user, reason)
+        """Called when the user just joined the channel"""
+        pass
 
     @hooks
     def userQuit(self, user, reason):
