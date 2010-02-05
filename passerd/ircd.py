@@ -541,8 +541,9 @@ class TwitterChannel(IrcChannel):
             i = 1
             while i <= len(recent):
                 r = recent[-i]
+                text = full_entity_decode(r.text)
                 #TODO: make it more flexible, ignoring punctuation and spaces
-                if substring.lower() in r.text.lower():
+                if substring.lower() in text:
                     matches.append(r)
                 i += 1
 
@@ -1148,6 +1149,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
     importance_recent = dialogs.CMD_IMP_DEBUGGING
     def command_recent(self, args):
         nick,substring = self.split_args(args)
+        substring = try_unicode(substring, IRC_ENCODING)
         try:
             r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
         except Exception,e:
@@ -1155,7 +1157,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             return
 
         if r:
-            self.message("match: id: %r. text: %r" % (r.id, r.text))
+            self.message("match: id: %r. text: %r" % (r.id, full_entity_decode(r.text)))
         else:
             self.message("no match...")
 
@@ -1172,6 +1174,9 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             return
 
         nick,substring = self.split_args(args)
+
+        # substring parameter must be unicode, not byte str
+        substring = try_unicode(substring, IRC_ENCODING)
         try:
             r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
         except Exception,e:
