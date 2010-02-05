@@ -687,7 +687,7 @@ class TwitterChannel(IrcChannel):
 
         def done(*args):
             #FIXME: remove this notice once we update the channel topic. we don't need it.
-            self.bot_notice("Twitter update posted!!")
+            self.bot_notice("Twitter update posted!")
 
         def error(e):
             if e.check(MessageTooLong):
