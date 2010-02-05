@@ -2194,11 +2194,13 @@ def run_as_daemon(opts):
     # stdin/stdout/stderr will be redirected to /dev/null, so they may be kept open,
     # too.
     preserve = range(MAXFD)
+    dc = daemon.DaemonContext(files_preserve=preserve, pidfile=pidfile)
+    dc.open()
     try:
-        with daemon.DaemonContext(files_preserve=preserve, pidfile=pidfile):
-            _run(opts)
+        _run(opts)
     except Exception,e:
         logger.exception(e)
+    dc.close()
 
 MAXFD = 2048
 
