@@ -1459,7 +1459,11 @@ class PasserdProtocol(IRC):
 
     def _userQuit(self, reason):
         self.dm_feed.stop_refreshing()
-        for ch in self.joined_channels:
+        dbg("joined channels: %r", self.joined_channels)
+        # list will change under our feet, so copy it:
+        joined = self.joined_channels[:]
+        for ch in joined:
+            dbg("ch: %r", ch)
             self.leave_channel(ch, reason)
         self._set_scheduler(None)
         self.quit_sent = True
