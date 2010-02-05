@@ -1478,6 +1478,13 @@ class PasserdProtocol(IRC):
         self.scheduler.start()
 
     @check_aborted
+    def send_motd(self):
+        self.send_reply(irc.RPL_MOTDSTART, ":- %s Message of the day - " % (self.myhost))
+        self.send_reply(irc.RPL_MOTD, ":- Welcome to Passerd")
+        self.send_reply(irc.RPL_MOTD, ":- For additional information and help, see %s" % (version.URL))
+        self.send_reply(irc.RPL_ENDOFMOTD, ":End of MOTD command")
+
+    @check_aborted
     def welcome_anonymous(self):
         self.notice("Welcome, anonymous user!")
         self.notice("If you already have a Passerd account set up, identify yourself with the command: /MSG PASSERD-BOT LOGIN username password")
@@ -1742,6 +1749,9 @@ class PasserdProtocol(IRC):
             self.send_reply(irc.RPL_WHOREPLY, *m)
         self.send_reply(irc.RPL_ENDOFWHO, ':End of WHO list')
 
+    def irc_MOTD(self, p, args):
+        self.send_motd()
+
     @requires_auth
     def irc_WHOIS(self, p, args):
         if len(args) > 2:
@@ -1838,7 +1848,7 @@ class PasserdProtocol(IRC):
         self.send_reply(irc.RPL_CREATED, ":This server was created by the Flying Spaghetti Monster")
         self.send_reply(irc.RPL_MYINFO, self.myhost, version.VERSION, SUPPORTED_USER_MODES, SUPPORTED_CHAN_MODES)
 
-        #TODO: send a MOTD with useful information
+        self.send_motd()
 
 
     def set_authenticated_user(self, u):
