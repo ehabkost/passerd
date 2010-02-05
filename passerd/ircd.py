@@ -1378,9 +1378,22 @@ def requires_auth(fn):
     return wrapper
 
 
+def check_aborted(fn):
+    """A decorator to make a function not do anything if the object is "aborted"
+    """
+    def wrapper(self, *args, **kwargs):
+        dbg("aborted wrapper for %r called", fn)
+        if self.aborted():
+            dbg("it's aborted")
+            return
+        dbg("calling %r", fn)
+        return fn(self, *args, **kwargs)
+    return wrapper
+
 class PasserdProtocol(IRC):
     def connectionMade(self):
         self.quit_sent = False
+        self._aborted = False
 
         IRC.connectionMade(self)
         pinfo("Got connection from %s", self.hostname)
@@ -1402,7 +1415,6 @@ class PasserdProtocol(IRC):
 
         self.global_twuser_cache = self.factory.global_twuser_cache
         self.twitter_users = TwitterIrcUserCache(self, self.global_twuser_cache)
-
 
         self.my_irc_server = IrcServer(self, self.myhost)
 
@@ -1434,30 +1446,51 @@ class PasserdProtocol(IRC):
 
         dbg("Got new client")
 
+    def aborted(self):
+        return self._aborted
+
+    def abort(self):
+        """Makes all @check_aborted functions stop doing anything
+        """
+        dbg("abort")
+        #FIXME: we need to keep track of current requests/connections and
+        # abort all of them, instead of letting them continue running,
+        # but just ignoring the replies. The scheduler may be a good place
+        # to keep track of all pending requests
+        self._aborted = True
+        self._stop_scheduler()
+
+    @check_aborted
     def welcome_user(self):
         for ch in self.autojoin_channels:
             self.join_cname(ch)
         self.dm_feed.start_refreshing()
         self.scheduler.start()
 
+    @check_aborted
     def welcome_anonymous(self):
         self.notice("Welcome, anonymous user!")
         self.notice("If you already have a Passerd account set up, identify yourself with the command: /MSG PASSERD-BOT LOGIN username password")
         self.notice("If your account is not set up yet, please join the #new-user-setup channel to set up your account")
 
-
+    @check_aborted
     def redirect_to_new_user_setup(self):
         """Send the user to the OAuth user setup channel"""
         self.send_notice(self.passerd_bot, self.the_user, "Please join #new-user-setup to set up your account")
         self.join_cname('#new-user-setup')
 
-    def _set_scheduler(self, scheduler):
+    def _stop_scheduler(self):
         if self.scheduler:
             self.scheduler.stop()
             self.scheduler = None
+
+    @check_aborted
+    def _set_scheduler(self, scheduler):
+        self._stop_scheduler()
         self.scheduler = scheduler
 
     def _userQuit(self, reason):
+        dbg("_userQuit: %r", reason)
         self.dm_feed.stop_refreshing()
         dbg("joined channels: %r", self.joined_channels)
         # list will change under our feet, so copy it:
@@ -1465,13 +1498,13 @@ class PasserdProtocol(IRC):
         for ch in joined:
             dbg("ch: %r", ch)
             self.leave_channel(ch, reason)
-        self._set_scheduler(None)
+        # stop everything we are doing
+        self.abort()
         self.quit_sent = True
 
     def userQuit(self, reason):
         if not self.quit_sent:
             self._userQuit(reason)
-            self.quit_sent = True
 
     def gotDirectMessage(self, msg):
         self.global_twuser_cache.got_api_user_info(msg.sender)
@@ -1559,10 +1592,12 @@ class PasserdProtocol(IRC):
 
     ## overwrite some methods of the twisted.words IRC class:
 
+    @check_aborted
     def sendMessage(self, *args, **kwargs):
         dbg("sending message: %r %r" % (args, kwargs))
         return IRC.sendMessage(self, *args, **kwargs)
 
+    @check_aborted
     def sendLine(self, *args, **kwargs):
         dbg("sending line: %r %r" % (args, kwargs))
         return IRC.sendLine(self, *args, **kwargs)
@@ -1626,11 +1661,15 @@ class PasserdProtocol(IRC):
         if not (chan in self.joined_channels):
             chan.userJoined(self.the_user)
             self.joined_channels.append(chan)
+        dbg("joined channels now: %r", self.joined_channels)
 
     def leave_channel(self, chan, reason):
+        dbg("leaving channel %r", chan)
         if chan in self.joined_channels:
+            dbg("chan %r is joined", chan)
             chan.userLeft(self.the_user, reason)
             self.joined_channels.remove(chan)
+            dbg("joined channels now: %r", self.joined_channels)
 
     def leave_cname(self, cname, reason):
         channel = self.get_channel(cname)
@@ -1781,6 +1820,7 @@ class PasserdProtocol(IRC):
     def is_authenticated(self):
         return (self.authenticated_user is not None)
 
+    @check_aborted
     def _send_welcome_replies(self):
         """Send standard IRC numeric replies after registration"""
         self.send_reply(irc.RPL_WELCOME, ":Welcome to the Internet Relay Network %s!%s@%s" % (self.the_user.nick, self.the_user.username, self.the_user.hostname))

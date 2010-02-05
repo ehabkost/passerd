@@ -86,15 +86,21 @@ class ApiScheduler:
             u.resched()
         return u
 
+    def _dbg_dump(self):
+        dbg("running: %r. current updater list: %r", self.running, self.updaters.values())
+
     def _remove_updater(self, u):
         del self.updaters[id(u)]
+        self._dbg_dump()
 
     def _resched_updater(self, u):
         self.pending_queue.append(u)
         self._run_shots()
+        self._dbg_dump()
 
     def _unsched_updater(self, u):
         self.pending_queue.remove(u)
+        self._dbg_dump()
 
     def _run_shots(self):
         while self.shots_available > 0 and self.pending_queue:
@@ -108,6 +114,10 @@ class ApiScheduler:
         # (DMs, home timeline, mentions, other feeds), avoiding
         # bugging the user multiple times
         dbg("_run_next called")
+        if not self.running:
+            dbg("not running")
+            return
+
         updater_count = len(self.updaters)
 
         self.shots_available = updater_count
@@ -123,6 +133,9 @@ class ApiScheduler:
 
     def _sched_next(self, delay):
         dbg("scheduling next call for %d seconds", delay)
+        if not self.running:
+            dbg("not scheduling: not running")
+            return
         self.next_call = reactor.callLater(delay, self._run_next)
 
     def _cancel_next(self):
@@ -133,11 +146,13 @@ class ApiScheduler:
             self.next_call = None
 
     def start(self):
+        dbg("starting scheduler")
         if not self.running:
             self.running = True
             self._run_next()
 
     def stop(self):
+        dbg("stopping scheduler")
         self.running = False
         self._cancel_next()
 
