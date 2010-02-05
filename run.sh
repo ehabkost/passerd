@@ -11,7 +11,7 @@ add_pypath()
 	fi
 }
 
-if [ ! -d "$mydir/third-party/twitty-twister" ];then
+if [ ! -f "$mydir/third-party/twitty-twister/twittytwister/twitter.py" ];then
 	echo "You need to update the twitty-twister submodule. Run:" >&2
 	echo "    git submodule init"
 	echo "    git submodule update"
