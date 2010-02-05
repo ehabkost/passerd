@@ -6,7 +6,7 @@ Python modules:
 
 * twisted (and its 'twisted.words' module)
 * sqlite
-* sqlalchemy
+* sqlalchemy (recommended version 0.5.4 or later)
 * oauth
 * A patched version of twitty-twister -- but don't worry: it is automatically fetched by `git submodule` and `./run.sh` (see run instructions below)
 
