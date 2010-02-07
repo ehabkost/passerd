@@ -1,5 +1,10 @@
 ### Current development version:
 
+* Support for Python 2.4
+* Send MOTD when welcoming user, as some clients and scripts expect MOTD to be
+  always present
+
+
 ### Passerd 0.1.0 - 24 Jan 2010
 
 * Add a simple scheduling algorithm that will make sure Passerd don't kill the
