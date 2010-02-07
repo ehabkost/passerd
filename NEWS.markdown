@@ -3,6 +3,13 @@
 * Support for Python 2.4
 * Send MOTD when welcoming user, as some clients and scripts expect MOTD to be
   always present
+* Bugs fixed:
+  * issue #76: handle windows-1252 chars
+  * issue #83: support Python 2.4
+  * issue #82: unicode handling on `!rt`
+  * issue #84: feeds still running after disconnect
+  * issue #30: don't show every friend from a user on #@user channel
+  * issue #55: send MOTD when user connects
 
 
 ### Passerd 0.1.0 - 24 Jan 2010
