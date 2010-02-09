@@ -1197,9 +1197,9 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
         if not r:
             if substring:
-                self.message("no match for [%s] on posts by %s" % (substring, nick))
+                self.message(u"no match for [%s] on posts by %s" % (substring, nick))
             else:
-                self.message("no posts from %s" % (nick))
+                self.message(u"no posts from %s" % (nick))
             return
 
         data = []
