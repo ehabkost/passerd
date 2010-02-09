@@ -928,7 +928,7 @@ class UserChannel(TwitterChannel):
 
         #FIXME: use a self.proto.get_user()-like function that uses lookup_screen_name
         #       and return it if info is available (see similar FIXME note on proto.get_user())
-        return [self.proto.the_user, UnknownTwitterUser(self.proto, self.user)]
+        return [self.proto.passerd_bot, self.proto.the_user, UnknownTwitterUser(self.proto, self.user)]
 
     #TODO: this was enabled in the past, but it just polluted the channel,
     #      as we don't see any messages from the people that follow the user.
