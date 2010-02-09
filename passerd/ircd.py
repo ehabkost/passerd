@@ -1185,8 +1185,10 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
         nick,substring = self.split_args(args)
 
-        # substring parameter must be unicode, not byte str
-        substring = try_unicode(substring, IRC_ENCODING)
+        if substring:
+            # substring parameter must be unicode, not byte str
+            substring = try_unicode(substring, IRC_ENCODING)
+
         try:
             r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
         except Exception,e:
