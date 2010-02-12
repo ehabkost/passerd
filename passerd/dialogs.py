@@ -25,6 +25,10 @@
 # THE SOFTWARE.
 import re
 
+
+import logging
+logger = logging.getLogger("passerd")
+
 class Dialog:
     """An abstract interface to "user dialogs"
     """
@@ -271,12 +275,17 @@ class CommandDialog(Dialog):
         return True,fn(args)
 
     def recv_message(self, msg):
-        worked,r = self.try_msg(msg)
-        if worked:
-            return r
-        else:
-            cmd,args = r
-            return self.unknown_command(cmd, args)
+        try:
+            worked,r = self.try_msg(msg)
+            if worked:
+                return r
+            else:
+                cmd,args = r
+                return self.unknown_command(cmd, args)
+        except Exception,e:
+            self.message("Ouch! An unexpected fatal error has occurred. I am very sorry. [%s]" % (e))
+            logger.error("Exception on dialog %r. msg: %r" % (self, msg))
+            logger.exception(e)
 
 
 class CommandHelpMixin:
