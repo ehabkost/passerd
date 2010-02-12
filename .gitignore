@@ -3,3 +3,5 @@ tags
 docs/html/*.html
 .*.swp
 build/
+MANIFEST
+dist/
