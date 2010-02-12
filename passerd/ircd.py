@@ -42,7 +42,7 @@ from twittytwister.twitter import Twitter, TwitterClientInfo
 from passerd.data import DataStore, TwitterUserData
 from passerd.callbacks import CallbackList
 from passerd.utils import full_entity_decode
-from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed
+from passerd.feeds import HomeTimelineFeed, ListTimelineFeed, UserTimelineFeed, MentionsFeed, DirectMessagesFeed, ThrottlerMessage
 from passerd.scheduler import ApiScheduler
 from passerd import dialogs
 from passerd.dialogs import Dialog, CommandDialog, CommandHelpMixin, attach_dialog_to_channel, attach_dialog_to_bot
@@ -459,8 +459,9 @@ class TwitterChannel(IrcChannel):
 
         self.feeds = self._createFeeds()
         for f in self.feeds:
-            f.addCallback(self.got_entry)
+            f.addEntryCallback(self.got_entry)
             f.addErrback(self.refresh_error)
+            f.addRawErrback(self.raw_refresh_error)
 
         self.cmd_dialog = PasserdCommands(proto, self)
         self.cmd_dialog.set_message_func(self.bot_msg)
@@ -579,11 +580,12 @@ class TwitterChannel(IrcChannel):
         self._add_to_history(e)
 
     def got_entry(self, e):
-        dbg("#twitter got_entry. id: %s", e.id)
+        dbg("%s got_entry. id: %s", self.name, e.id)
         self.cache_entry(e)
         if e.retweeted_status:
             self.cache_entry(e.retweeted_status)
         self.printEntry(e)
+
 
     def bot_msg(self, msg):
         self.proto.send_privmsg(self.proto.passerd_bot, self, msg)
@@ -592,19 +594,25 @@ class TwitterChannel(IrcChannel):
         self.proto.send_notice(self.proto.passerd_bot, self, msg)
 
     def refresh_error(self, e):
-        dbg("#twitter refresh error")
-        #FIXME: stop showing repeated errors and just let the user know when service is back
-        if e.check(twisted.web.error.Error):
-            if str(e.value.status) == '503':
-                self.bot_notice("Look! A flying whale! -- %s" % (e.value))
-                return
+        dbg("%s refresh error: %r", self.name, e)
+        if isinstance(e, twisted.web.error.Error):
+            if str(e.status) == '503':
+                return self.bot_notice("Look! A flying whale! -- %s" % (e))
+
+        if isinstance(e, ThrottlerMessage):
+            # throttler messages are shown directly
+            return self.bot_notice(str(e))
+
+        self.bot_notice("error refreshing feed: %s" % (e))
+
+    def raw_refresh_error(self, e):
+        dbg("%s raw refresh error: %r", self.name, e)
+        if isinstance(e, twisted.web.error.Error):
             remaining = self.proto.api.rate_limit_remaining
             # note that it will not wait when remaining is None, which is
             # intended
-            if e.value.status == '400' and remaining == 0:
+            if e.status == '400' and remaining == 0:
                 self.wait_rate_limit()
-
-        self.bot_notice("error refreshing feed: %s" % (e.value))
 
     def wait_rate_limit(self):
         reset = time.ctime(self.proto.api.rate_limit_reset)
@@ -641,12 +649,15 @@ class TwitterChannel(IrcChannel):
 
     def forceRefresh(self, last):
         def doit(f):
-            f._refresh(last_id=last).addCallback(done)
+            f._refresh(last_id=last).addCallbacks(done, error)
 
         def done(num_args):
             if num_args == 0:
                 #FIXME: we are sending notice as if it was from the user, here
                 self.bot_msg('people are quiet...')
+
+        def error(e):
+            self.bot_msg('error refreshing: %s' % (e.value))
 
         for f in self.feeds:
             doit(f)
@@ -1461,7 +1472,7 @@ class PasserdProtocol(IRC):
         self.joined_channels = []
 
         self.dm_feed = DirectMessagesFeed(self)
-        self.dm_feed.addCallback(self.gotDirectMessage)
+        self.dm_feed.addEntryCallback(self.gotDirectMessage)
         self.dm_feed.addErrback(self.dmError)
 
         dbg("Got new client")
@@ -1539,7 +1550,8 @@ class PasserdProtocol(IRC):
         self.send_text(sender, self.the_user, msg.text)
 
     def dmError(self, e):
-        self.notice("Error pulling Direct Messages: %s" % (e.value))
+        dbg("dmError: %r", e)
+        self.notice("Error pulling Direct Messages: %s" % (e))
 
     def send_text(self, sender, target, text):
         # security:

@@ -40,17 +40,86 @@ QUERY_COUNT = 100
 logger = logging.getLogger('passerd.feeds')
 dbg = logger.debug
 
+class ThrottlerMessage:
+    """Class useful to identify throttler messages on error callbacks"""
+    def __init__(self, msg):
+        self._msg = msg
+
+    def __str__(self):
+        return str(self._msg)
+
+class BackWorkingMessage(ThrottlerMessage):
+    pass
+
+class ThrottlerStopMessage(ThrottlerMessage):
+    pass
+
+class ErrorThrottler:
+    """Filter repeated error messages"""
+
+    # max number of times repeated error messages can be shown:
+    MAX_SAME_ERROR = 1
+
+    # max number of different error messages that can be shown:
+    MAX_DIFF_ERROR = 4
+
+    # informative messages:
+    SAME_ERROR_MSG = "I got the same error again. I will shut up and just tell you when things are back to normal"
+    LOTS_ERRORS_MSG = "I am getting too many errors. I will shut up and just tell you when things are back to normal"
+    BACK_WORKING = "Good! Things seem to be working again"
+
+    def __init__(self, real_error_fn):
+        self._real_fn = real_error_fn
+        self._last_err = None
+        self._same_err_count = 0
+        self._any_err_count = 0
+        self._stopped = False
+
+    def _stop(self, msg):
+        self._real_fn(ThrottlerStopMessage(msg))
+        self._stopped = True
+
+    def error(self, e):
+        self._any_err_count += 1
+        msg = str(e)
+        if msg == self._last_err:
+            self._same_err_count += 1
+        else:
+            self._same_err_count = 1
+        self._last_err = msg
+
+        if self._stopped:
+            return
+
+        if self._same_err_count > self.MAX_SAME_ERROR:
+            return self._stop(self.SAME_ERROR_MSG)
+
+        if self._any_err_count > self.MAX_DIFF_ERROR:
+            return self._stop(self.LOTS_ERRORS_MSG)
+
+        return self._real_fn(e)
+
+    def ok(self):
+        if self._stopped:
+            self._real_fn(BackWorkingMessage(self.BACK_WORKING))
+        self._same_err_count = 0
+        self._any_err_count = 0
+        self._stopped = False
+
+
 class TwitterFeed:
 
     def __init__(self, proto):
         self.proto = proto
         self.updater = None
-        self.callbacks = CallbackList()
+        self.entry_cb = CallbackList()
         self.errbacks = CallbackList()
+        self.raw_errbacks = CallbackList()
         self.continue_refreshing = False
         self.next_refresh = None
         self.loading = False
         self._last_id = None
+        self._error_handler = ErrorThrottler(self.report_error)
 
     def _last_id_var(self):
         return self.LAST_ID_VAR
@@ -65,13 +134,17 @@ class TwitterFeed:
             self._last_id = self.proto.user_var(self._last_id_var())
         return self._last_id
 
-    def addCallback(self, *args, **kwargs):
+    def addEntryCallback(self, *args, **kwargs):
         """Add a callback for new entries"""
-        self.callbacks.addCallback(*args, **kwargs)
+        self.entry_cb.addCallback(*args, **kwargs)
 
     def addErrback(self, *args, **kwargs):
         """Add a callbck for loading errors"""
         self.errbacks.addCallback(*args, **kwargs)
+
+    def addRawErrback(self, *args, **kwargs):
+        """Add a "raw" error callback, without error throttling"""
+        self.raw_errbacks.addCallback(*args, **kwargs)
 
     @property
     def api(self):
@@ -97,13 +170,12 @@ class TwitterFeed:
             if last_id:
                 args['since_id'] = last_id
             args['count'] = str(QUERY_COUNT)
-            self._timeline(got_entry, args).addCallbacks(finished, error)
+            return self._timeline(got_entry, args).addCallbacks(finished, error)
             dbg("_refresh returning")
 
-        def error(*args):
-            dbg("_refresh error %r" % (args,))
-            d.errback(*args)
-            self.errbacks.callback(*args)
+        def error(e):
+            dbg("_refresh error %r", e)
+            return e
 
         # store the entries and then show them in chronological order:
         def got_entry(e):
@@ -112,14 +184,21 @@ class TwitterFeed:
 
         def finished(*args):
             dbg("finished loading %r" % (args,))
+
+            # tell the error throttler that things are ok, now:
+            self._error_handler.ok()
+
             for e in entries:
-                self.callbacks.callback(e)
+                self.entry_cb.callback(e)
                 if self.last_id is None or int(e.id) > int(self.last_id):
                     self.update_last_id(e.id)
-            d.callback(len(entries))
+            return len(entries)
 
-        doit()
-        return d
+        return doit()
+
+    def report_error(self, e):
+        """Send an error message back to interested parties"""
+        self.errbacks.callback(e)
 
     def refresh(self):
         def doit():
@@ -130,15 +209,18 @@ class TwitterFeed:
             self.loading = True
             self._refresh().addCallbacks(done, error).addBoth(resched)
 
-        def error(*args):
+        def error(e):
             dbg("ERROR while refreshing")
+            self.raw_errbacks.callback(e)
+            self._error_handler.error(e.value)
+            return e
 
         def done(num_entries):
             dbg("got %d entries." % (num_entries))
 
         def resched(*args):
             self.loading = False
-            dbg("rescheduling...")
+            dbg("rescheduling... [%r]", args)
             self.refresh_resched()
 
         return doit()
