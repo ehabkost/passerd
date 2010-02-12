@@ -243,7 +243,7 @@ class CommandDialog(Dialog):
                 if main: name='Other commands'
                 else: name='Available commands'
                 pref = self.cmd_prefix
-                clist = ' '.join(['%s%s' % (pref,c.upper()) for c in rest])
+                clist = ', '.join(['%s%s' % (pref,c.upper()) for c in rest])
                 self.message("%s: %s" % (name, clist))
         if topics:
             self.message('Other help topics:' % (prefix))
