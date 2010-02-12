@@ -1066,12 +1066,46 @@ class BeCommands(CommandDialog):
             self.message(" %s - %s" % (t, self._short_help(t)))
 
 
+class DebugCommands(CommandDialog):
+    """Some misc debug commands"""
+    def dialog_init(self, proto, chan=None, *args, **kwargs):
+        self.proto = proto
+        self.chan = chan
+
+    shorthelp_gc = 'Run Python garbage collection (debugging/testing command)'
+    def command_gc(self, args):
+        self.message("Object counts: %r" % (gc.get_count(),))
+        r = gc.collect()
+        self.message("Garbage collection run. %d objects freed" % (r))
+        self.message("New object counts: %r" % (gc.get_count(),))
+
+    #TODO: add 'needs_chan' decorator
+    shorthelp_recent = "Debug the recent-post matching code"
+    def command_recent(self, args):
+        nick,substring = self.split_args(args)
+        substring = try_unicode(substring, IRC_ENCODING)
+        try:
+            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
+        except Exception,e:
+            self.message("error: %s" % (e))
+            return
+
+        if r:
+            self.message("match: id: %r. text: %r" % (r.id, full_entity_decode(r.text)))
+        else:
+            self.message("no match...")
+
+
 class PasserdCommands(CommandHelpMixin, CommandDialog):
+    # subcommands:
+    importance_debug = dialogs.CMD_IMP_DEBUGGING
+
     def dialog_init(self, proto, chan=None, *args, **kwargs):
         self.proto = proto
         self.chan = chan
         self.add_subdialog('config', ConfigCommands(proto), 'Query and change config settings')
         self.add_subdialog('be',  BeCommands(proto, parent=self))
+        self.add_subdialog('debug', DebugCommands(proto, chan, parent=self), 'Debugging commands')
 
         self.add_alias('s',   'post')
         self.add_alias('twit',   'post')
@@ -1106,14 +1140,6 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
                 self.proto.redirect_to_new_user_setup()
 
         doit()
-
-    shorthelp_gc = 'Run Python garbage collection (debugging/testing command)'
-    importance_gc = dialogs.CMD_IMP_DEBUGGING
-    def command_gc(self, args):
-        self.message("Object counts: %r" % (gc.get_count(),))
-        r = gc.collect()
-        self.message("Garbage collection run. %d objects freed" % (r))
-        self.message("New object counts: %r" % (gc.get_count(),))
 
     shorthelp_rate = 'Show Twitter API rate-limit info'
     importance_rate = dialogs.CMD_IMP_ADVANCED
@@ -1152,24 +1178,6 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             self.message("Error while posting: %s" % (e.value))
 
         return defer.maybeDeferred(doit).addCallback(done).addErrback(error)
-
-    #TODO: add 'needs_chan' decorator
-
-    shorthelp_recent = "Debug the recent-post matching code"
-    importance_recent = dialogs.CMD_IMP_DEBUGGING
-    def command_recent(self, args):
-        nick,substring = self.split_args(args)
-        substring = try_unicode(substring, IRC_ENCODING)
-        try:
-            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
-        except Exception,e:
-            self.message("error: %s" % (e))
-            return
-
-        if r:
-            self.message("match: id: %r. text: %r" % (r.id, full_entity_decode(r.text)))
-        else:
-            self.message("no match...")
 
     #TODO: add 'needs_chan' decorator
     shorthelp_rt = "Retweet a post"
