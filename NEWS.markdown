@@ -10,7 +10,7 @@
   * issue #84: feeds still running after disconnect
   * issue #30: don't show every friend from a user on #@user channel
   * issue #55: send MOTD when user connects
-
+  * issue #71: don't flood the user with error messages
 
 ### Passerd 0.1.0 - 24 Jan 2010
 
