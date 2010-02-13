@@ -1,5 +1,5 @@
-What do I need, to use Passerd?
--------------------------------
+Requirements for Passerd
+------------------------
 
 _Passerd_ is written in Python. You need Python (of course!), and the following
 Python modules:
@@ -39,8 +39,8 @@ These dependencies currently match the 2010.0 release but should be ok for other
 	urpmi python-twisted-words python-sqlite python-sqlalchemy python-oauth
 
 
-How do I run it?
-----------------
+How to run it
+-------------
 
 Right now the recommended way to run Passerd is to check out the source
 directly from the git repository.
