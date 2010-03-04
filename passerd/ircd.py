@@ -1726,6 +1726,12 @@ class PasserdProtocol(IRC):
     def irc_PING(self, prefix, args):
         self.server_message('PONG', args[0])
 
+    def irc_AWAY(self, prefix, args):
+        if args:
+            self.send_reply(irc.RPL_NOWAWAY, ':You have been marked as being away')
+        else:
+            self.send_reply(irc.RPL_UNAWAY, ':You are no longer marked as being away')
+
     def irc_JOIN(self, prefix, params):
         dbg("JOIN! %r %r" % (prefix, params))
         cnames = params[0]

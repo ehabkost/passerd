@@ -3,6 +3,7 @@
 * Support for Python 2.4
 * Send MOTD when welcoming user, as some clients and scripts expect MOTD to be
   always present
+* Handle AWAY messages from clients (simply ignoring the away message)
 * Bugs fixed:
   * issue #76: handle windows-1252 chars
   * issue #83: support Python 2.4
