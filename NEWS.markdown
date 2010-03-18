@@ -1,4 +1,4 @@
-### Current development version:
+### Passerd 0.1.1 - 18 Mar 2010
 
 * Support for Python 2.4
 * Send MOTD when welcoming user, as some clients and scripts expect MOTD to be
