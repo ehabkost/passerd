@@ -1,3 +1,10 @@
+### Current development version
+
+
+* Bugs fixed:
+  * Issue #91: !RT upper-case matching
+
+
 ### Passerd 0.1.1 - 18 Mar 2010
 
 * Support for Python 2.4

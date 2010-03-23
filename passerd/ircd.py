@@ -544,7 +544,7 @@ class TwitterChannel(IrcChannel):
                 r = recent[-i]
                 text = full_entity_decode(r.text)
                 #TODO: make it more flexible, ignoring punctuation and spaces
-                if substring.lower() in text:
+                if substring.lower() in text.lower():
                     matches.append(r)
                 i += 1
 
