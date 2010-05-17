@@ -1,0 +1,69 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          passerd
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DESC="Twitter client that runs an IRC server"
+NAME=passerd
+DAEMON=/usr/bin/$NAME
+PIDFILE=/var/run/$NAME.pid
+SCRIPTNAME=/etc/init.d/$NAME
+
+PASSERD_PORT="localhost:6667"
+PASSERD_OPTS="-d --log-file=/var/log/passerd.log /var/lib/passerd/data.sqlite"
+
+# include passerd defaults if available.
+test -f /etc/default/$NAME && . /etc/default/$NAME
+
+# gracefully exit if the package has been removed.
+test -x $DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+d_start() {
+        touch $PIDFILE
+        start-stop-daemon --start --quiet --pidfile $PIDFILE \
+                --exec $DAEMON -- passerd  -l $PASSERD_PORT $PASSERD_OPTS
+}
+
+d_status() {
+    ps ax | grep -q $DAEMON && echo "$NAME is running" || echo "$NAME is not running"
+}
+
+d_stop() {
+        start-stop-daemon --stop --quiet --pidfile $PIDFILE \
+                --name $NAME
+}
+
+case "$1" in
+  start)
+        echo -n "Starting $DESC: $NAME"
+        d_start
+        echo "."
+        ;;
+
+  stop)
+        echo -n "Stopping $DESC: $NAME"
+        d_stop
+        echo "."
+        ;;
+  status)
+        d_status
+        RETVAL=$?
+        ;;
+  restart|reload)
+        $0 stop
+        $0 start
+        ;;
+  *)
+        echo -n "Usage: %s {start|stop|status|restart}\n" "$0"
+        RETVAL=1
+        ;;
+esac
+
+exit $RETVAL

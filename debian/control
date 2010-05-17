@@ -1,0 +1,16 @@
+Source: passerd
+Section: net
+Priority: extra
+Maintainer: Olavo Junior <skyegg@gmail.com>
+Build-Depends: cdbs, debhelper (>= 7), python-dev, python-support, python-setuptools
+XS-Python-Version: all
+Standards-Version: 3.8.3
+Homepage: http://passerd.raisama.net
+
+Package: passerd
+Architecture: any
+Depends: ${misc:Depends}, ${python:Depends}, python-twisted, python-sqlite, python-sqlalchemy, python-oauth, python-daemon, python-twittytwister
+Description: Twitter client that runs an IRC server 
+ Passerd is a Twitter client that runs an IRC server. Just run it
+ and point an IRC client to it, and you'll see your Twitter friends
+ as IRC contacts, and tweets appearing as messages on an IRC channel.
