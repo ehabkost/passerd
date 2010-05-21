@@ -1280,6 +1280,11 @@ class NewUserDialog(ProtoDialog, Dialog):
 
         def error_get_token(e):
             bm("Error while trying to get an OAuth token: %s" % (e.value))
+            bm("this is not supposed to happen, sorry  :(")
+            if e.check(twisted.web.error.Error) and str(e.value.status) == '401':
+                bm("some possible causes for this error are:")
+                bm("- incorrect PIN")
+                bm("- misadjusted system clock")
             ask_restart()
 
         def show_progress(msg):
