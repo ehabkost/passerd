@@ -1237,6 +1237,48 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
         self.proto.api.retweet(str(r.id), got_it).addCallback(done).addErrback(error)
 
+    shorthelp_re = "Reply to a post"
+    importance_re = dialogs.CMD_IMP_COMMON
+    def help_re(self, args):
+        self.cmd_syntax('re', '<nick> <part of the post> <message>')
+        self.message('Will send a reply to a post that matches the supplied text.')
+
+    def command_re(self, args):
+        if not self.chan:
+            self.message("The RE command only works in a channel")
+            return
+
+        #TODO maybe use shlex.split() to allow using quotes?
+        nick,rest = self.split_args(args)
+        substring,msg = self.split_args(rest)
+        if substring:
+            substring = try_unicode(substring, IRC_ENCODING)
+        if not msg:
+            self.message(u"you need to provide a message")
+
+        try:
+            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
+        except Exception,e:
+            self.message(u"error: %s" % (e))
+            return
+
+        if not r:
+            self.message(u"no match for [%s] on posts by %s" % (substring, nick))
+            return
+
+        msg = "@" + nick + " " + msg
+
+        args = {'in_reply_to_status_id': str(r.id)}
+        dbg("re-msg: %r. args: %r", msg, args)
+
+        def done(*args):
+            self.message("Replied: %s" % (msg))
+
+        def error(e):
+            self.message("Error while replying: %s" % (e.value))
+
+        self.proto.send_twitter_post(msg, args).addCallback(done).addErrback(error)
+
 
 class PasserdBot(IrcUser):
     """The Passerd IRC bot, that is used for Passerd messages on the channel"""
