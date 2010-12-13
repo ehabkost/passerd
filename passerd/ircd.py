@@ -1279,6 +1279,34 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
 
         self.proto.send_twitter_post(msg, args).addCallback(done).addErrback(error)
 
+    shorthelp_spam = "Report spam"
+    importance_spam = dialogs.CMD_IMP_INTERESTING
+    def help_spam(self, args):
+        self.cmd_syntax('spam', '<nickname>')
+        self.message('Will report an user for spam')
+
+    def command_spam(self, args):
+        if not args:
+            self.message('Nickname required')
+            return
+
+        nick = args
+        u = self.proto.global_twuser_cache.lookup_screen_name(nick)
+        if u is None:
+            self.message("nickname %s not found", nick)
+            return
+        uid = u.twitter_id
+
+        ok = []
+        def got_user(u):
+            ok.append(u)
+            self.message('Reported user [%s] (uid %s) for spam' % (u.screen_name, u.id))
+        def done(*args):
+            if not ok:
+                self.message("Weird. Spam report API call didn't return user info...")
+        def error(e):
+            self.message("Error while reporting spam: %s" % (e.value))
+        self.proto.api.report_spam(uid, got_user).addCallback(done).addErrback(error)
 
 class PasserdBot(IrcUser):
     """The Passerd IRC bot, that is used for Passerd messages on the channel"""
