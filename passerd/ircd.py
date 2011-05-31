@@ -1308,6 +1308,73 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
             self.message("Error while reporting spam: %s" % (e.value))
         self.proto.api.report_spam(uid, got_user).addCallback(done).addErrback(error)
 
+    shorthelp_thread = "Show thread for a post"
+    importance_thread = dialogs.CMD_IMP_INTERESTING
+    def help_thread(self, args):
+        self.cmd_syntax('thread', 'nick [part of post text]')
+        self.message('If no text is specified, the latest post from <nick> will be used.')
+        self.message('If text is specified, the post containing the supplied text is used')
+    def command_thread(self, args):
+        if not self.chan:
+            self.message("The 'thread' command only works in a channel")
+            return
+
+        nick,substring = self.split_args(args)
+
+        if substring:
+            # substring parameter must be unicode, not byte str
+            substring = try_unicode(substring, IRC_ENCODING)
+
+        try:
+            r = self.chan.recent_post(nick, substring, MIN_LATEST_POST_AGE)
+        except Exception,e:
+            self.message("error: %s" % (e))
+            return
+
+        if not r:
+            if substring:
+                self.message(u"no match for [%s] on posts by %s" % (substring, nick))
+            else:
+                self.message(u"no posts from %s" % (nick))
+            return
+
+        def get_thread(p, back_count):
+            dbg("getThread: %r, %d", p, back_count)
+            d = defer.Deferred()
+            if back_count <= 0 or not p.in_reply_to_status_id:
+                d.callback([p])
+                return d
+
+            def error(e):
+                d.errback(e)
+
+            statuses = []
+            def got_it(s):
+                dbg("got_it: %r", s)
+                statuses.append(s)
+            def got_back(l):
+                dbg("got_back: %r", l)
+                d.callback(l+[p])
+            def done(*args):
+                if not statuses:
+                    got_back([])
+                    return
+                get_thread(statuses[0], back_count-1).addCallback(got_back).addErrback(error)
+            self.proto.api.status_get(str(r.in_reply_to_status_id), got_it).addCallback(done).addErrback(error)
+            return d
+
+        def got_thread(l):
+            dbg('got_thread: %r', l)
+            self.message('reply thread:')
+            for e in l:
+                self.chan.printEntry(e)
+            self.message('(end of reply thread)')
+        def error(e):
+            self.message("Error getting thread: %s" % (e.value))
+
+        self.message('fetching reply thread for message ID %s' % (r.id))
+        get_thread(r, 5).addCallback(got_thread).addErrback(error)
+
 class PasserdBot(IrcUser):
     """The Passerd IRC bot, that is used for Passerd messages on the channel"""
     def __init__(self, proto, nick):
