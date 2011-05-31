@@ -1360,7 +1360,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
                     got_back([])
                     return
                 get_thread(statuses[0], back_count-1).addCallback(got_back).addErrback(error)
-            self.proto.api.status_get(str(r.in_reply_to_status_id), got_it).addCallback(done).addErrback(error)
+            self.proto.api.status_get(str(p.in_reply_to_status_id), got_it).addCallback(done).addErrback(error)
             return d
 
         def got_thread(l):
@@ -1372,7 +1372,7 @@ class PasserdCommands(CommandHelpMixin, CommandDialog):
         def error(e):
             self.message("Error getting thread: %s" % (e.value))
 
-        self.message('fetching reply thread for message ID %s' % (r.id))
+        self.message('fetching reply thread for message ID %s...' % (r.id))
         get_thread(r, 5).addCallback(got_thread).addErrback(error)
 
 class PasserdBot(IrcUser):
