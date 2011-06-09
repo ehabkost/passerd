@@ -830,8 +830,9 @@ class MainChannel(FriendIDsMixIn, FriendlistMixIn, TwitterChannel):
         return [HomeTimelineFeed(self.proto)]
 
     def _friendList(self, delegate, params={}, page_delegate=None):
-        return self.proto.api.friends_ids(delegate, str(self.proto.authenticated_user.screen_name),
-                params=params, page_delegate=page_delegate)
+        params = params.copy()
+        params['user_id'] = self.proto.authenticated_user.id
+        return self.proto.api.friends_ids(delegate, params=params, page_delegate=page_delegate)
 
     def inviteUser(self, nickname):
         #TODO: send a better error message if user is already being followed
